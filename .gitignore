@@ -1,0 +1,34 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# WhatsApp Session (SENSITIF - jangan share!)
+session/
+auth_info*/
+baileys_store*.json
+
+# Database
+database/
+*.db
+*.sqlite
+
+# Python virtual environment
+venv/
+__pycache__/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

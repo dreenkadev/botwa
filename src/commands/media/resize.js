@@ -1,0 +1,39 @@
+// resize - dengan reaction
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+const sharp = require('sharp');
+const { reactProcessing, reactDone } = require('../../utils/reaction');
+
+module.exports = {
+    name: 'resize',
+    aliases: ['rs'],
+    description: 'resize gambar',
+
+    async execute(sock, msg, { chatId, args, mediaMessage, quotedMsg }) {
+        try {
+            let imageBuffer = null;
+
+            if (mediaMessage?.type === 'image') {
+                imageBuffer = await downloadMediaMessage(msg, 'buffer', {});
+            } else if (quotedMsg?.imageMessage) {
+                imageBuffer = await downloadMediaMessage({ message: quotedMsg, key: msg.key }, 'buffer', {});
+            }
+
+            if (!imageBuffer) {
+                await sock.sendMessage(chatId, { text: '*resize*\n\n.resize <width> [height]' }, { quoted: msg });
+                return;
+            }
+
+            await reactProcessing(sock, msg);
+
+            const width = parseInt(args[0]) || 512;
+            const height = parseInt(args[1]) || width;
+            const result = await sharp(imageBuffer).resize(width, height, { fit: 'fill' }).toBuffer();
+
+            await reactDone(sock, msg);
+            await sock.sendMessage(chatId, { image: result }, { quoted: msg });
+        } catch (err) {
+            await reactDone(sock, msg);
+            await sock.sendMessage(chatId, { text: 'gagal' }, { quoted: msg });
+        }
+    }
+};

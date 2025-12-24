@@ -1,0 +1,17 @@
+{
+  "users": {
+    "24932570402997@lid": {
+      "id": "24932570402997@lid",
+      "commandCount": 86,
+      "firstSeen": 1766297514602,
+      "lastCommand": 0,
+      "warnings": 0,
+      "blockedUntil": 0
+    }
+  },
+  "blacklist": [],
+  "stats": {
+    "totalCommands": 86,
+    "startTime": 1766472186254
+  }
+}
