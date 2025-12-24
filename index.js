@@ -34,11 +34,18 @@ function clearSession() {
 
 async function startBot() {
     const isReconnecting = hasSession();
+    const usePairingCode = process.env.PHONE_NUMBER && !isReconnecting;
 
     if (isReconnecting) {
         console.log('========================================');
         console.log('     Reconnecting to WhatsApp...');
         console.log('     Using saved session');
+        console.log('========================================');
+        console.log('');
+    } else if (usePairingCode) {
+        console.log('========================================');
+        console.log('     Starting DreenkaBot-WA');
+        console.log('     Using Pairing Code (Cloud Mode)');
         console.log('========================================');
         console.log('');
     } else {
@@ -73,12 +80,51 @@ async function startBot() {
             syncFullHistory: false
         });
 
+        // Request pairing code jika PHONE_NUMBER di-set dan belum ada session
+        if (usePairingCode) {
+            const phoneNumber = process.env.PHONE_NUMBER.replace(/[^0-9]/g, '');
+            console.log('========================================');
+            console.log('     PAIRING CODE MODE');
+            console.log('========================================');
+            console.log(`  Phone: ${phoneNumber}`);
+            console.log('========================================');
+            console.log('');
+            console.log('[*] Requesting pairing code...');
+
+            // Delay sedikit untuk koneksi
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            try {
+                const code = await sock.requestPairingCode(phoneNumber);
+                console.log('');
+                console.log('========================================');
+                console.log('     YOUR PAIRING CODE:');
+                console.log('');
+                console.log(`         ${code}`);
+                console.log('');
+                console.log('========================================');
+                console.log('');
+                console.log('  How to use:');
+                console.log('  1. Open WhatsApp on your phone');
+                console.log('  2. Tap Menu > Linked Devices');
+                console.log('  3. Tap "Link a Device"');
+                console.log('  4. Tap "Link with phone number instead"');
+                console.log(`  5. Enter code: ${code}`);
+                console.log('========================================');
+                console.log('');
+            } catch (err) {
+                console.log('[!] Failed to get pairing code:', err.message);
+                console.log('[*] Make sure PHONE_NUMBER is correct (with country code, e.g., 628123456789)');
+            }
+        }
+
         sock.ev.on('creds.update', saveCreds);
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
-            if (qr) {
+            // Hanya tampilkan QR jika tidak pakai pairing code
+            if (qr && !usePairingCode) {
                 console.clear();
                 console.log('========================================');
                 console.log('     SCAN QR CODE WITH WHATSAPP');
