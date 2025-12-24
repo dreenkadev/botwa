@@ -7,7 +7,7 @@ const { getMode } = require('../../core/state');
 module.exports = {
     name: 'bot',
     aliases: ['about', 'info'],
-    description: 'tampilkan info bot',
+    description: 'info bot',
 
     async execute(sock, msg, { chatId }) {
         try {
@@ -16,13 +16,15 @@ module.exports = {
             const botInfo = `*${config.botName || 'dreenkabot'}*
 
 owner: ${config.ownerName || 'dreenka'}
-prefix: ${config.prefix || '.'}
-mode: ${getMode() || 'public'}
+prefix: ${config.prefix || '.< command >'}
+mode: ${getMode() || 'private'}
 status: online
 
 sosmed owner:
-- ig: @dreenkadev
-- github: dreenkadev
+- ig: instagram.com/dreevx_/
+- github: github.com/dreenkadev
+- portofolio: dreenka.vercel.app/
+- gdev: g.dev/dreenka
 
 ketik ${config.prefix}menu untuk list command`;
 

@@ -1,12 +1,12 @@
 module.exports = {
     prefix: '.',
-    ownerNumber: '6285745831709',
-    ownerName: 'Vxyraa',
+    ownerNumber: '6285768943436',
+    ownerName: 'Dreenka',
     botName: 'DreenkaBot-WA',
-    botDescription: 'WhatsApp Bot powered by Baileys',
+    botDescription: 'WhatsApp Bot',
     signature: '𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃',
 
-    mode: 'public',
+    mode: 'private',
 
     cooldown: {
         duration: 5000,

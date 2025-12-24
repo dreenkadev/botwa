@@ -29,12 +29,26 @@ async function handleMessage(sock, msg) {
 
     const chatId = msg.key.remoteJid;
     const isGroup = chatId.endsWith('@g.us');
-    const sender = isGroup ? msg.key.participant : chatId;
-    const senderId = sender?.replace('@s.whatsapp.net', '') || '';
-    const isOwner = senderId === config.ownerNumber;
     const isFromMe = msg.key.fromMe;
 
-    // Allow owner commands even if fromMe, but skip other fromMe messages
+    // Determine sender correctly
+    // - In group: participant is the sender
+    // - In private + fromMe: sender is the bot/owner
+    // - In private + not fromMe: sender is chatId
+    let sender;
+    if (isGroup) {
+        sender = msg.key.participant;
+    } else if (isFromMe) {
+        // fromMe means the message is from the bot account (which is owner)
+        sender = config.ownerNumber + '@s.whatsapp.net';
+    } else {
+        sender = chatId;
+    }
+
+    const senderId = sender?.replace('@s.whatsapp.net', '') || '';
+    const isOwner = senderId === config.ownerNumber;
+
+    // Skip fromMe messages except for owner
     if (isFromMe && !isOwner) return;
 
     // mode check - no async
