@@ -24,7 +24,7 @@ function setCachedGroupMeta(chatId, data) {
 
 async function handleMessage(sock, msg) {
     // quick checks first - no async
-    if (!msg.message || msg.key.fromMe) return;
+    if (!msg.message) return;
     if (msg.key.remoteJid === 'status@broadcast') return;
 
     const chatId = msg.key.remoteJid;
@@ -32,6 +32,10 @@ async function handleMessage(sock, msg) {
     const sender = isGroup ? msg.key.participant : chatId;
     const senderId = sender?.replace('@s.whatsapp.net', '') || '';
     const isOwner = senderId === config.ownerNumber;
+    const isFromMe = msg.key.fromMe;
+
+    // Allow owner commands even if fromMe, but skip other fromMe messages
+    if (isFromMe && !isOwner) return;
 
     // mode check - no async
     if (getMode() === 'self' && !isOwner) return;
