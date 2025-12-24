@@ -2,14 +2,14 @@
 const config = require('../../../config');
 
 const CATEGORY_NAMES = {
-    general: 'general',
-    owner: 'owner',
-    group: 'group',
-    moderation: 'moderation',
-    media: 'media',
-    utility: 'utility',
-    fun: 'fun',
-    ai: 'ai'
+    general: 'GENERAL',
+    owner: 'OWNER',
+    group: 'GROUP',
+    moderation: 'MODERATION',
+    media: 'MEDIA',
+    utility: 'UTILITY',
+    fun: 'FUN',
+    ai: 'AI'
 };
 
 module.exports = {
@@ -23,8 +23,10 @@ module.exports = {
             const commandsByCategory = getCommandsByCategory();
             const categories = getCategories();
 
-            let menuText = `*${config.botName || 'dreenkabot'}*
-prefix: ${config.prefix}
+            let menuText = `${config.botName || 'DreenkaBot'}
+━━━━━━━━━━━━━━━━━━━━
+Prefix: ${config.prefix}
+━━━━━━━━━━━━━━━━━━━━
 
 `;
 
@@ -34,14 +36,18 @@ prefix: ${config.prefix}
                 const cmds = commandsByCategory.get(category) || [];
                 if (cmds.length === 0) continue;
 
-                const name = CATEGORY_NAMES[category] || category;
-                menuText += `-- ${name} --\n`;
+                const name = CATEGORY_NAMES[category] || category.toUpperCase();
+                menuText += `[ ${name} ]\n`;
 
-                const cmdList = cmds.map(cmd => config.prefix + cmd.name).join(', ');
-                menuText += `${cmdList}\n\n`;
+                for (const cmd of cmds) {
+                    menuText += `  ${config.prefix}${cmd.name}\n`;
+                }
+                menuText += '\n';
             }
 
-            menuText += `ketik ${config.prefix}mi <cmd> untuk info`;
+            menuText += `━━━━━━━━━━━━━━━━━━━━
+${config.prefix}mi <cmd> untuk info
+${config.signature}`;
 
             await sock.sendMessage(chatId, { text: menuText.trim() }, { quoted: msg });
         } catch (err) {
