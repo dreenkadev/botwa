@@ -8,7 +8,8 @@ const {
     makeCacheableSignalKeyStore
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal');
+const qrTerminal = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const fs = require('fs');
 const http = require('http');
 const { handleMessage, handleGroupUpdate } = require('./src/handlers/messageHandler');
@@ -20,6 +21,7 @@ const logger = pino({ level: 'silent' });
 
 let sock = null;
 let reconnectAttempts = 0;
+let currentQR = null; // Store current QR for web access
 const MAX_RECONNECT = 5;
 
 function hasSession() {
@@ -89,63 +91,69 @@ async function startBot() {
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
-            // Request pairing code ketika dapat QR (berarti socket sudah siap)
-            if (qr && usePairingCode && !pairingCodeRequested) {
-                pairingCodeRequested = true;
-                const phoneNumber = process.env.PHONE_NUMBER.replace(/[^0-9]/g, '');
+            // Tampilkan semua opsi login ketika dapat QR
+            if (qr) {
+                currentQR = qr; // Store for web access
+                const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+                    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+                    : `http://localhost:${process.env.PORT || 3000}`;
 
                 console.log('');
-                console.log('========================================');
-                console.log('     PAIRING CODE MODE');
-                console.log('========================================');
-                console.log(`  Phone: ${phoneNumber}`);
-                console.log('========================================');
+                console.log('╔══════════════════════════════════════╗');
+                console.log('║      LOGIN OPTIONS AVAILABLE         ║');
+                console.log('╠══════════════════════════════════════╣');
+                console.log('║                                      ║');
+                console.log('║  [1] SCAN QR CODE (Terminal)         ║');
+                console.log('║  [2] OPEN QR IN BROWSER              ║');
+                console.log('║  [3] USE PAIRING CODE                ║');
+                console.log('║                                      ║');
+                console.log('╚══════════════════════════════════════╝');
                 console.log('');
-                console.log('[*] Requesting pairing code...');
 
-                try {
-                    const code = await sock.requestPairingCode(phoneNumber);
-                    console.log('');
-                    console.log('========================================');
-                    console.log('');
-                    console.log(`     PAIRING CODE: ${code}`);
-                    console.log('');
-                    console.log('========================================');
-                    console.log('');
-                    console.log('  How to use:');
-                    console.log('  1. Open WhatsApp on your phone');
-                    console.log('  2. Tap Menu > Linked Devices');
-                    console.log('  3. Tap "Link a Device"');
-                    console.log('  4. Tap "Link with phone number instead"');
-                    console.log(`  5. Enter code: ${code}`);
-                    console.log('========================================');
-                    console.log('');
-                    console.log('[*] Waiting for connection...');
-                    console.log('');
-                } catch (err) {
-                    console.log('[!] Failed to get pairing code:', err.message);
-                    console.log('[*] Make sure PHONE_NUMBER is correct');
-                    console.log('[*] Format: 628123456789 (country code + number, no + or spaces)');
-                    console.log('');
+                // Option 1: QR di Terminal
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('  [1] QR CODE - Scan with WhatsApp:');
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                qrTerminal.generate(qr, { small: true });
+                console.log('');
+
+                // Option 2: QR via Browser
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('  [2] QR IMAGE - Open in browser:');
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log(`  📎 ${baseUrl}/qr`);
+                console.log('');
+
+                // Option 3: Pairing Code
+                if (process.env.PHONE_NUMBER && !pairingCodeRequested) {
+                    pairingCodeRequested = true;
+                    const phoneNumber = process.env.PHONE_NUMBER.replace(/[^0-9]/g, '');
+                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                    console.log('  [3] PAIRING CODE:');
+                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                    try {
+                        const code = await sock.requestPairingCode(phoneNumber);
+                        console.log(`  📱 Phone: ${phoneNumber}`);
+                        console.log(`  🔑 Code:  ${code}`);
+                        console.log('');
+                        console.log('  Steps: WhatsApp > Linked Devices > Link a Device');
+                        console.log('         > "Link with phone number instead"');
+                        console.log(`         > Enter: ${code}`);
+                    } catch (err) {
+                        console.log(`  ❌ Failed: ${err.message}`);
+                        console.log('  💡 Check PHONE_NUMBER format: 628xxxxxxxxxx');
+                    }
+                } else if (!process.env.PHONE_NUMBER) {
+                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                    console.log('  [3] PAIRING CODE: (not configured)');
+                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                    console.log('  💡 Set PHONE_NUMBER env to enable');
                 }
-            }
 
-            // Hanya tampilkan QR jika tidak pakai pairing code
-            if (qr && !usePairingCode) {
-                console.clear();
-                console.log('========================================');
-                console.log('     SCAN QR CODE WITH WHATSAPP');
-                console.log('========================================');
-                console.log('  1. Open WhatsApp on your phone');
-                console.log('  2. Tap Menu or Settings');
-                console.log('  3. Tap "Linked Devices"');
-                console.log('  4. Tap "Link a Device"');
-                console.log('  5. Scan this QR code');
-                console.log('========================================');
                 console.log('');
-                qrcode.generate(qr, { small: true });
-                console.log('');
-                console.log('[*] Scan within 40 seconds...');
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('  ⏳ Waiting for authentication...');
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                 console.log('');
             }
 
@@ -273,15 +281,135 @@ console.log('    WhatsApp Bot by DreenkaDev');
 console.log('  =====================================');
 console.log('');
 
-// HTTP Health Check Server untuk Railway
+// HTTP Health Check Server untuk Railway + QR Image
 const PORT = process.env.PORT || 3000;
-const server = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/') {
+const server = http.createServer(async (req, res) => {
+    // CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    if (req.url === '/qr') {
+        // Serve QR code as image
+        if (currentQR) {
+            try {
+                const qrImage = await QRCode.toDataURL(currentQR, {
+                    width: 512,
+                    margin: 2,
+                    color: { dark: '#000000', light: '#ffffff' }
+                });
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>DreenkaBot - Scan QR</title>
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <style>
+                            * { margin: 0; padding: 0; box-sizing: border-box; }
+                            body {
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                min-height: 100vh;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                padding: 20px;
+                            }
+                            .card {
+                                background: white;
+                                border-radius: 24px;
+                                padding: 40px;
+                                box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+                                text-align: center;
+                                max-width: 400px;
+                            }
+                            h1 { color: #1a1a2e; margin-bottom: 8px; font-size: 24px; }
+                            p { color: #666; margin-bottom: 24px; }
+                            img { border-radius: 16px; max-width: 100%; }
+                            .steps {
+                                background: #f8f9fa;
+                                border-radius: 12px;
+                                padding: 16px;
+                                margin-top: 24px;
+                                text-align: left;
+                                font-size: 14px;
+                                color: #444;
+                            }
+                            .steps li { margin: 8px 0; }
+                            .refresh {
+                                margin-top: 16px;
+                                padding: 12px 24px;
+                                background: #667eea;
+                                color: white;
+                                border: none;
+                                border-radius: 8px;
+                                cursor: pointer;
+                                font-size: 14px;
+                            }
+                            .refresh:hover { background: #5a67d8; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="card">
+                            <h1>🤖 DreenkaBot</h1>
+                            <p>Scan QR code with WhatsApp</p>
+                            <img src="${qrImage}" alt="QR Code" />
+                            <ol class="steps">
+                                <li>Open WhatsApp on your phone</li>
+                                <li>Tap <strong>Menu</strong> or <strong>Settings</strong></li>
+                                <li>Tap <strong>Linked Devices</strong></li>
+                                <li>Tap <strong>Link a Device</strong></li>
+                                <li>Scan this QR code</li>
+                            </ol>
+                            <button class="refresh" onclick="location.reload()">🔄 Refresh QR</button>
+                        </div>
+                        <script>setTimeout(() => location.reload(), 30000);</script>
+                    </body>
+                    </html>
+                `);
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'text/plain' });
+                res.end('Error generating QR');
+            }
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>DreenkaBot</title>
+                    <meta http-equiv="refresh" content="3">
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            min-height: 100vh;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            color: white;
+                            text-align: center;
+                        }
+                        .loader { font-size: 48px; animation: pulse 1s infinite; }
+                        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+                    </style>
+                </head>
+                <body>
+                    <div>
+                        <div class="loader">⏳</div>
+                        <h2>Waiting for QR Code...</h2>
+                        <p>Page will auto-refresh</p>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+    } else if (req.url === '/health' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-            status: 'online',
+            status: currentQR ? 'waiting_auth' : 'online',
             bot: config.botName,
             uptime: process.uptime(),
+            qr_available: !!currentQR,
             timestamp: new Date().toISOString()
         }));
     } else {
@@ -292,6 +420,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`[*] Health server running on port ${PORT}`);
+    console.log(`[*] QR page available at: http://localhost:${PORT}/qr`);
     console.log('');
 });
 
