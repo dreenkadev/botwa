@@ -419,8 +419,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : `http://localhost:${PORT}`;
     console.log(`[*] Health server running on port ${PORT}`);
-    console.log(`[*] QR page available at: http://localhost:${PORT}/qr`);
+    console.log(`[*] QR page: ${baseUrl}/qr`);
     console.log('');
 });
 
