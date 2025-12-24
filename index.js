@@ -10,6 +10,7 @@ const {
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
+const http = require('http');
 const { handleMessage, handleGroupUpdate } = require('./src/handlers/messageHandler');
 const config = require('./config');
 const { initDatabase } = require('./src/utils/database');
@@ -271,6 +272,28 @@ console.log('       DreenkaBot-WA v2.0');
 console.log('    WhatsApp Bot by DreenkaDev');
 console.log('  =====================================');
 console.log('');
+
+// HTTP Health Check Server untuk Railway
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            status: 'online',
+            bot: config.botName,
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString()
+        }));
+    } else {
+        res.writeHead(404);
+        res.end('Not Found');
+    }
+});
+
+server.listen(PORT, () => {
+    console.log(`[*] Health server running on port ${PORT}`);
+    console.log('');
+});
 
 initDatabase();
 startBot();
