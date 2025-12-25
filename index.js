@@ -460,6 +460,20 @@ server.listen(PORT, () => {
     console.log(`[*] Health server running on port ${PORT}`);
     console.log(`[*] QR page: ${baseUrl}/qr`);
     console.log('');
+
+    // Auto-ping setiap 10 menit untuk mencegah cold start
+    if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+        const axios = require('axios');
+        setInterval(async () => {
+            try {
+                await axios.get(`${baseUrl}/health`, { timeout: 5000 });
+                console.log('[Keep-Alive] Ping successful');
+            } catch {
+                console.log('[Keep-Alive] Ping failed');
+            }
+        }, 10 * 60 * 1000); // setiap 10 menit
+        console.log('[*] Keep-alive enabled (ping every 10 min)');
+    }
 });
 
 initDatabase();
