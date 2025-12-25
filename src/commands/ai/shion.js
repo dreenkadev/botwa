@@ -1,10 +1,11 @@
 // shion - Shion AI roleplay chatbot
 const axios = require('axios');
+const config = require('../../../config');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
 
 module.exports = {
     name: 'shion',
-    aliases: ['shionai'],
+    aliases: ['shionai', 'waifu-ai'],
     description: 'chat dengan shion AI',
 
     async execute(sock, msg, { chatId, args, quotedText }) {
@@ -28,7 +29,7 @@ module.exports = {
                 await sock.sendMessage(chatId, { text: response }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
-                    text: 'shion tidak bisa menjawab'
+                    text: 'shion tidak bisa menjawab saat ini'
                 }, { quoted: msg });
             }
         } catch (err) {
@@ -41,20 +42,66 @@ module.exports = {
 };
 
 async function chatWithShion(text) {
-    try {
-        const res = await axios.get(`https://zelapioffciall.koyeb.app/ai/shion?text=${encodeURIComponent(text)}`, {
-            timeout: 30000
-        });
+    const shionPrompt = `Kamu adalah Shion, seorang gadis anime yang imut dan ceria. Kamu berbicara dengan gaya yang manis dan kadang tsundere. Kamu suka menggunakan emoticon seperti (≧◡≦), (*^▽^*), (◕‿◕✿). Jawab dalam bahasa yang sama dengan pertanyaan user.
 
-        if (res.data?.status && res.data?.result?.content) {
-            return res.data.result.content.trim();
-        }
-    } catch { }
+User: ${text}
+Shion:`;
 
-    try {
-        const fallbackRes = await axios.get(`https://api.siputzx.my.id/api/ai/gpt?prompt=${encodeURIComponent(`Kamu adalah Shion, karakter anime manis. User: ${text}`)}`);
-        if (fallbackRes.data?.result) return fallbackRes.data.result;
-    } catch { }
+    // API 1: Groq (if available)
+    if (config.groqApiKey) {
+        try {
+            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+                model: 'llama3-8b-8192',
+                messages: [{ role: 'user', content: shionPrompt }],
+                max_tokens: 500
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${config.groqApiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 30000
+            });
 
-    return null;
+            if (res.data?.choices?.[0]?.message?.content) {
+                return res.data.choices[0].message.content.trim();
+            }
+        } catch { }
+    }
+
+    // API 2: Gemini (if available)
+    if (config.geminiApiKey) {
+        try {
+            const geminiRes = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${config.geminiApiKey}`,
+                { contents: [{ parts: [{ text: shionPrompt }] }] },
+                { timeout: 30000 }
+            );
+
+            if (geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                return geminiRes.data.candidates[0].content.parts[0].text.trim();
+            }
+        } catch { }
+    }
+
+    // API 3: Free GPT alternatives
+    const freeApis = [
+        `https://api.nyxs.pw/ai/gpt4?text=${encodeURIComponent(shionPrompt)}`,
+        `https://widipe.com/gpt4?text=${encodeURIComponent(shionPrompt)}`
+    ];
+
+    for (const apiUrl of freeApis) {
+        try {
+            const res = await axios.get(apiUrl, { timeout: 30000 });
+            if (res.data?.result) return res.data.result;
+        } catch { }
+    }
+
+    // Fallback: Simple canned responses
+    const responses = [
+        `Hai! Shion senang kamu ngobrol sama aku~ (≧◡≦) ${text}? Hmm, menarik!`,
+        `E-eh? ${text}? B-bukan berarti aku peduli atau apa ya! (*^▽^*)`,
+        `Wah wah~ Kamu tanya tentang ${text.substring(0, 20)}? Shion akan coba jawab! (◕‿◕✿)`,
+    ];
+
+    return responses[Math.floor(Math.random() * responses.length)];
 }

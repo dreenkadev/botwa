@@ -1,11 +1,12 @@
 // songgenerator - AI Song Generator
+// NOTE: Free AI music generation APIs are very limited
 const axios = require('axios');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
 
 module.exports = {
     name: 'songgenerator',
     aliases: ['aisong', 'songai', 'createmusic'],
-    description: 'generate lagu dari text prompt',
+    description: 'generate lagu dari prompt (experimental)',
 
     async execute(sock, msg, { chatId, args, quotedText }) {
         try {
@@ -13,14 +14,14 @@ module.exports = {
 
             if (!prompt) {
                 await sock.sendMessage(chatId, {
-                    text: 'songgenerator\n\n.songgenerator <prompt>\n\ncontoh:\n.songgenerator happy pop song\n.songgenerator sad ballad'
+                    text: 'songgenerator (experimental)\n\n.songgenerator <prompt>\n\ncontoh:\n.songgenerator happy pop song\n.songgenerator sad acoustic ballad\n\nnote: fitur ini sangat terbatas karena API gratis'
                 }, { quoted: msg });
                 return;
             }
 
             await reactProcessing(sock, msg);
             await sock.sendMessage(chatId, {
-                text: 'generating song... (1-3 menit)'
+                text: 'generating song... (bisa sampai 2-3 menit)\n\nnote: jika gagal, API mungkin sedang sibuk'
             }, { quoted: msg });
 
             const result = await generateSong(prompt);
@@ -28,23 +29,29 @@ module.exports = {
             await reactDone(sock, msg);
 
             if (result?.audio) {
-                const audioRes = await axios.get(result.audio, {
-                    responseType: 'arraybuffer',
-                    timeout: 120000
-                });
+                try {
+                    const audioRes = await axios.get(result.audio, {
+                        responseType: 'arraybuffer',
+                        timeout: 120000
+                    });
 
-                await sock.sendMessage(chatId, {
-                    audio: Buffer.from(audioRes.data),
-                    mimetype: 'audio/mpeg',
-                    ptt: false
-                }, { quoted: msg });
+                    await sock.sendMessage(chatId, {
+                        audio: Buffer.from(audioRes.data),
+                        mimetype: 'audio/mpeg',
+                        ptt: false
+                    }, { quoted: msg });
 
-                await sock.sendMessage(chatId, {
-                    text: `ai song\nprompt: ${prompt}`
-                }, { quoted: msg });
+                    await sock.sendMessage(chatId, {
+                        text: `ai song generated\nprompt: ${prompt}`
+                    }, { quoted: msg });
+                } catch {
+                    await sock.sendMessage(chatId, {
+                        text: `song generated tapi gagal download\nlink: ${result.audio}`
+                    }, { quoted: msg });
+                }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: 'gagal generate song. ' + (result?.error || 'coba lagi')
+                    text: 'gagal generate song. API gratis untuk AI music sangat terbatas dan sering down.'
                 }, { quoted: msg });
             }
         } catch (err) {
@@ -57,41 +64,38 @@ module.exports = {
 };
 
 async function generateSong(prompt) {
+    // API 1: Suno alternative
     try {
-        const response = await axios.post(
-            'https://api.termai.cc/api/audioProcessing/song-generator',
-            {},
-            {
-                params: { prompt: prompt, key: 'TermAI-guest' },
-                timeout: 180000
-            }
-        );
-
-        if (typeof response.data === 'string') {
-            const matches = response.data.match(/data: (.+)/g);
-            if (matches) {
-                for (const match of matches) {
-                    try {
-                        const data = JSON.parse(match.replace('data: ', ''));
-                        if (data.status === 'success' && data.result) {
-                            return { audio: data.result };
-                        }
-                    } catch { }
-                }
-            }
-        }
-
-        if (response.data?.result) {
-            return { audio: response.data.result };
-        }
-    } catch { }
-
-    try {
-        const fallbackRes = await axios.get(`https://api.siputzx.my.id/api/ai/suno?prompt=${encodeURIComponent(prompt)}`, {
+        const res = await axios.get(`https://api.vreden.my.id/api/suno?prompt=${encodeURIComponent(prompt)}`, {
             timeout: 180000
         });
-        if (fallbackRes.data?.url) return { audio: fallbackRes.data.url };
+
+        if (res.data?.result?.audio_url) {
+            return { audio: res.data.result.audio_url };
+        }
     } catch { }
 
-    return { error: 'no result' };
+    // API 2: Beat generator alternative
+    try {
+        const res2 = await axios.get(`https://widipe.com/suno?text=${encodeURIComponent(prompt)}`, {
+            timeout: 180000
+        });
+
+        if (res2.data?.result) {
+            return { audio: res2.data.result };
+        }
+    } catch { }
+
+    // API 3: Mubert-like
+    try {
+        const res3 = await axios.get(`https://api.betabotz.eu.org/api/tools/mubert?text=${encodeURIComponent(prompt)}&apikey=free`, {
+            timeout: 180000
+        });
+
+        if (res3.data?.result) {
+            return { audio: res3.data.result };
+        }
+    } catch { }
+
+    return null;
 }

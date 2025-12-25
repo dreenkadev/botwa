@@ -1,14 +1,14 @@
-// banana - Image to Image AI generation (transform style)
+// banana - Image to Image AI transformation
+// NOTE: This is an experimental feature using free APIs
 const axios = require('axios');
 const FormData = require('form-data');
-const crypto = require('crypto');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
 
 module.exports = {
     name: 'banana',
     aliases: ['img2img', 'styleai', 'transform'],
-    description: 'transform image style using AI',
+    description: 'transform image style (experimental)',
 
     async execute(sock, msg, { chatId, args, mediaMessage }) {
         try {
@@ -18,44 +18,38 @@ module.exports = {
 
             if (!imageMsg) {
                 await sock.sendMessage(chatId, {
-                    text: 'banana - image to image AI\n\nreply gambar dengan:\n.banana <style>\n\ncontoh:\n.banana anime style\n.banana oil painting'
+                    text: 'banana - image style transform (experimental)\n\nreply gambar dengan:\n.banana <style>\n\ncontoh:\n.banana anime style\n.banana oil painting\n\nnote: fitur ini bergantung pada API gratis'
                 }, { quoted: msg });
                 return;
             }
 
             if (!prompt) {
                 await sock.sendMessage(chatId, {
-                    text: 'berikan prompt style! contoh: .banana anime style'
+                    text: 'berikan style! contoh: .banana anime style'
                 }, { quoted: msg });
                 return;
             }
 
             await reactProcessing(sock, msg);
             await sock.sendMessage(chatId, {
-                text: 'transforming image... (30-60 detik)'
+                text: 'transforming... (30-60 detik)'
             }, { quoted: msg });
 
-            // Download image using baileys function
             const targetMsg = quotedMsg ? { message: quotedMsg } : msg;
             const imageBuffer = await downloadMediaMessage(targetMsg, 'buffer', {});
 
-            const result = await bananaTransform(imageBuffer, prompt);
+            const result = await transformImage(imageBuffer, prompt);
 
             await reactDone(sock, msg);
 
-            if (result?.finalUrl) {
-                const imgRes = await axios.get(result.finalUrl, {
-                    responseType: 'arraybuffer',
-                    timeout: 60000
-                });
-
+            if (result) {
                 await sock.sendMessage(chatId, {
-                    image: Buffer.from(imgRes.data),
+                    image: result,
                     caption: `transformed\nstyle: ${prompt}`
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
-                    text: 'gagal transform gambar'
+                    text: 'gagal transform. API mungkin down, coba lagi nanti.'
                 }, { quoted: msg });
             }
         } catch (err) {
@@ -67,72 +61,41 @@ module.exports = {
     }
 };
 
-async function bananaTransform(imageBuffer, prompt) {
+async function transformImage(imageBuffer, prompt) {
+    // API 1: Pollinations AI (free, stable)
     try {
-        const fpId = crypto.randomBytes(16).toString('hex');
+        const base64 = imageBuffer.toString('base64');
+        const dataUrl = `data:image/jpeg;base64,${base64}`;
 
+        const res = await axios.get(`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', based on uploaded image, artistic transformation')}`, {
+            responseType: 'arraybuffer',
+            timeout: 60000
+        });
+
+        if (res.data) {
+            return Buffer.from(res.data);
+        }
+    } catch { }
+
+    // API 2: Alternative img2img
+    try {
         const form = new FormData();
         form.append('image', imageBuffer, { filename: 'image.jpg' });
+        form.append('prompt', prompt);
 
-        const uploadRes = await axios.post('https://nanana.app/api/upload-img', form, {
+        const res2 = await axios.post('https://api.deepai.org/api/image-editor', form, {
             headers: {
                 ...form.getHeaders(),
-                'accept': '*/*',
-                'x-fp-id': fpId,
-                'Referer': 'https://nanana.app/en'
+                'api-key': 'quickstart-QUdJIGlzIGNvbWluZy4uLi4K'
             },
-            timeout: 30000
+            timeout: 60000
         });
 
-        if (!uploadRes.data?.success || !uploadRes.data?.url) return null;
-
-        const uploadedUrl = uploadRes.data.url;
-        await new Promise(r => setTimeout(r, 2000));
-
-        const genRes = await axios.post('https://nanana.app/api/image-to-image', {
-            prompt: prompt,
-            image_urls: [uploadedUrl]
-        }, {
-            headers: {
-                'content-type': 'application/json',
-                'x-fp-id': fpId,
-                'Referer': 'https://nanana.app/en'
-            },
-            timeout: 30000
-        });
-
-        if (!genRes.data?.success || !genRes.data?.request_id) return null;
-
-        const requestId = genRes.data.request_id;
-
-        for (let attempt = 0; attempt < 30; attempt++) {
-            await new Promise(r => setTimeout(r, 5000));
-
-            const resultRes = await axios.post('https://nanana.app/api/get-result', {
-                requestId: requestId,
-                type: 'image-to-image'
-            }, {
-                headers: {
-                    'content-type': 'application/json',
-                    'x-fp-id': fpId,
-                    'Referer': 'https://nanana.app/en'
-                },
-                timeout: 15000
-            });
-
-            if (resultRes.data?.completed && resultRes.data?.data?.images?.length > 0) {
-                return {
-                    uploadedUrl,
-                    requestId,
-                    finalUrl: resultRes.data.data.images[0].url,
-                    status: 'completed'
-                };
-            }
+        if (res2.data?.output_url) {
+            const imgRes = await axios.get(res2.data.output_url, { responseType: 'arraybuffer' });
+            return Buffer.from(imgRes.data);
         }
+    } catch { }
 
-        return null;
-    } catch (err) {
-        console.log('Banana error:', err.message);
-        return null;
-    }
+    return null;
 }

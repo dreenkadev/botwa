@@ -1,46 +1,34 @@
-// elevenlabs - ElevenLabs AI TTS
+// elevenlabs - Text to Speech with various voices
 const axios = require('axios');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
 
-const VOICES = {
-    'adam': 'Adam',
-    'bella': 'Bella',
-    'elli': 'Elli',
-    'josh': 'Josh',
-    'rachel': 'Rachel',
-    'sam': 'Sam',
-    'antoni': 'Antoni',
-    'domi': 'Domi'
-};
+const VOICES = ['adam', 'bella', 'elli', 'josh', 'rachel', 'sam', 'antoni', 'domi'];
 
 module.exports = {
     name: 'elevenlabs',
-    aliases: ['eltts', 'el'],
-    description: 'text to speech with elevenlabs voices',
+    aliases: ['eltts', 'el', 'voice'],
+    description: 'text to speech',
 
     async execute(sock, msg, { chatId, args, quotedText }) {
         try {
             const voiceArg = args[0]?.toLowerCase();
             let text = args.slice(1).join(' ') || quotedText;
 
-            if (!voiceArg || !VOICES[voiceArg]) {
-                const voiceList = Object.keys(VOICES).join(', ');
-                await sock.sendMessage(chatId, {
-                    text: `elevenlabs tts\n\n.el <voice> <text>\n\nvoices: ${voiceList}\n\ncontoh:\n.el bella hello world`
-                }, { quoted: msg });
-                return;
+            // If first arg is not a voice, use default voice
+            if (voiceArg && !VOICES.includes(voiceArg)) {
+                text = args.join(' ') || quotedText;
             }
 
             if (!text) {
                 await sock.sendMessage(chatId, {
-                    text: `usage: .el ${voiceArg} <text>`
+                    text: `elevenlabs tts\n\n.el [voice] <text>\n.el <text> (default: bella)\n\nvoices: ${VOICES.join(', ')}\n\ncontoh:\n.el bella hello world\n.el halo semua`
                 }, { quoted: msg });
                 return;
             }
 
             await reactProcessing(sock, msg);
 
-            const audioBuffer = await generateTTS(text, voiceArg);
+            const audioBuffer = await generateTTS(text, voiceArg || 'bella');
 
             await reactDone(sock, msg);
 
@@ -65,30 +53,42 @@ module.exports = {
 };
 
 async function generateTTS(text, voice) {
+    // API 1: Google Translate TTS (reliable)
     try {
-        // API 1: TermAI ElevenLabs
-        const res = await axios.get(`https://api.termai.cc/api/text-to-speech/elevenlabs`, {
-            params: {
-                text: text,
-                voice: voice,
-                key: 'TermAI-guest'
-            },
+        const lang = /[a-zA-Z]/.test(text) ? 'en' : 'id';
+        const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
+
+        const res = await axios.get(googleUrl, {
             responseType: 'arraybuffer',
-            timeout: 30000
+            timeout: 15000,
+            headers: { 'User-Agent': 'Mozilla/5.0' }
         });
 
-        if (res.data) {
-            return Buffer.from(res.data);
-        }
+        if (res.data) return Buffer.from(res.data);
     } catch { }
 
-    // Fallback: Simple TTS
+    // API 2: VoiceRSS (backup)
     try {
-        const fallbackRes = await axios.get(`https://api.siputzx.my.id/api/tools/tts?text=${encodeURIComponent(text)}`, {
+        const voiceRssUrl = `https://api.voicerss.org/?key=c4d7d17c9c7c4fc099f11a25db3c6b11&hl=en-us&src=${encodeURIComponent(text)}&f=48khz_16bit_stereo`;
+
+        const res2 = await axios.get(voiceRssUrl, {
             responseType: 'arraybuffer',
             timeout: 15000
         });
-        return Buffer.from(fallbackRes.data);
+
+        if (res2.data) return Buffer.from(res2.data);
+    } catch { }
+
+    // API 3: ResponsiveVoice
+    try {
+        const rvUrl = `https://texttospeech.responsivevoice.org/v1/text:synthesize?text=${encodeURIComponent(text)}&lang=en&engine=g1&pitch=0.5&rate=0.5&volume=1&key=0POmS5Y2`;
+
+        const res3 = await axios.get(rvUrl, {
+            responseType: 'arraybuffer',
+            timeout: 15000
+        });
+
+        if (res3.data) return Buffer.from(res3.data);
     } catch { }
 
     return null;
