@@ -1,78 +1,73 @@
-// voicecover - AI voice cover untuk lagu
+// voicecover - AI voice cover
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+const FormData = require('form-data');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
 
-// AI Voice models yang tersedia
-const VOICE_MODELS = [
-    'Miku', 'Ariana Grande', 'Taylor Swift', 'Bruno Mars', 'Ed Sheeran',
-    'Billie Eilish', 'The Weeknd', 'Dua Lipa', 'Justin Bieber', 'Drake',
-    'Kanye West', 'Rihanna', 'Adele', 'Lady Gaga', 'Selena Gomez'
-];
+const MODELS = {
+    'miku': 'Hatsune Miku',
+    'ariana': 'Ariana Grande',
+    'taylor': 'Taylor Swift',
+    'billie': 'Billie Eilish',
+    'drake': 'Drake',
+    'weeknd': 'The Weeknd',
+    'ed': 'Ed Sheeran',
+    'bruno': 'Bruno Mars'
+};
 
 module.exports = {
     name: 'voicecover',
-    aliases: ['aicover', 'vc', 'voiceai'],
-    description: 'Convert audio to AI voice cover',
+    aliases: ['vc', 'cover', 'voiceai'],
+    description: 'ai voice cover',
 
     async execute(sock, msg, { chatId, args, mediaMessage }) {
         try {
-            // Check for quoted audio
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const audioMsg = mediaMessage?.audioMessage || quotedMsg?.audioMessage ||
-                quotedMsg?.documentMessage;
+            const audioMsg = mediaMessage?.message?.audioMessage || quotedMsg?.audioMessage;
+            const modelArg = args[0]?.toLowerCase();
 
-            // Show help if no audio
-            if (!audioMsg) {
-                const modelList = VOICE_MODELS.slice(0, 10).join(', ');
+            if (!modelArg || !MODELS[modelArg]) {
+                const modelList = Object.entries(MODELS).map(([k, v]) => `${k} (${v})`).join('\n');
                 await sock.sendMessage(chatId, {
-                    text: `*🎤 AI VOICE COVER*\n\nReply audio/voice note dengan:\n.voicecover <model>\n\n*Available Models:*\n${modelList}, dll.\n\n*Example:*\nReply audio + .voicecover Miku\nReply audio + .voicecover Taylor Swift`
+                    text: `voicecover\n\nreply audio + .voicecover <model>\n\nmodels:\n${modelList}\n\ncontoh:\n.voicecover miku`
                 }, { quoted: msg });
                 return;
             }
 
-            // Get model name
-            const model = args.join(' ') || 'Miku';
+            if (!audioMsg) {
+                await sock.sendMessage(chatId, {
+                    text: 'reply audio dengan: .voicecover ' + modelArg
+                }, { quoted: msg });
+                return;
+            }
 
             await reactProcessing(sock, msg);
+            await sock.sendMessage(chatId, {
+                text: 'processing voice cover... (30-60 detik)'
+            }, { quoted: msg });
 
-            // Download audio from message
-            const stream = await sock.downloadMediaMessage(
-                quotedMsg ? { message: quotedMsg } : msg
-            );
-            const audioBuffer = Buffer.isBuffer(stream) ? stream : Buffer.from(stream);
+            const targetMsg = quotedMsg ? { message: quotedMsg } : msg;
+            const audioBuffer = await downloadMediaMessage(targetMsg, 'buffer', {});
 
-            // Try AI Voice Cover API
-            const result = await generateVoiceCover(audioBuffer, model);
+            const result = await generateVoiceCover(audioBuffer, MODELS[modelArg]);
 
             await reactDone(sock, msg);
 
             if (result) {
-                // Download result audio
-                const audioRes = await axios.get(result, {
-                    responseType: 'arraybuffer',
-                    timeout: 60000
-                });
-
                 await sock.sendMessage(chatId, {
-                    audio: Buffer.from(audioRes.data),
+                    audio: result,
                     mimetype: 'audio/mpeg',
                     ptt: false
                 }, { quoted: msg });
-
-                await sock.sendMessage(chatId, {
-                    text: `✅ *Voice Cover Complete!*\n🎤 Model: ${model}`
-                }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Gagal generate voice cover. Coba voice model lain atau audio yang berbeda.'
+                    text: 'gagal generate voice cover'
                 }, { quoted: msg });
             }
         } catch (err) {
             await reactDone(sock, msg);
             await sock.sendMessage(chatId, {
-                text: '❌ Error: ' + err.message
+                text: 'error: ' + err.message
             }, { quoted: msg });
         }
     }
@@ -80,68 +75,29 @@ module.exports = {
 
 async function generateVoiceCover(audioBuffer, model) {
     try {
-        // API 1: TermAI (if available)
-        const response = await axios.post(
-            'https://api.termai.cc/api/audioProcessing/voice-covers',
-            audioBuffer,
-            {
-                params: {
-                    model: model,
-                    key: 'TermAI-guest'
-                },
-                headers: {
-                    'Content-Type': 'audio/mpeg'
-                },
-                timeout: 120000
-            }
-        );
+        const form = new FormData();
+        form.append('file', audioBuffer, { filename: 'audio.mp3' });
 
-        if (response.data?.result) {
-            return response.data.result;
-        }
+        const uploadRes = await axios.post('https://api.termai.cc/upload', form, {
+            headers: { ...form.getHeaders() },
+            timeout: 30000
+        });
 
-        // Parse SSE response if streaming
-        if (typeof response.data === 'string') {
-            const matches = response.data.match(/data: (.+)/g);
-            if (matches) {
-                for (const match of matches) {
-                    try {
-                        const data = JSON.parse(match.replace('data: ', ''));
-                        if (data.status === 'success' && data.result) {
-                            return data.result;
-                        }
-                    } catch { }
-                }
-            }
+        if (!uploadRes.data?.url) return null;
+
+        const coverRes = await axios.post('https://api.termai.cc/api/audioProcessing/voice-cover', {
+            audioPath: uploadRes.data.url,
+            singer: model,
+            key: 'TermAI-guest'
+        }, { timeout: 120000, responseType: 'arraybuffer' });
+
+        if (coverRes.data) {
+            return Buffer.from(coverRes.data);
         }
 
         return null;
     } catch (err) {
-        console.log('Voice Cover API error:', err.message);
-
-        // Try alternative API
-        try {
-            const form = new (require('form-data'))();
-            form.append('audio', audioBuffer, {
-                filename: 'audio.mp3',
-                contentType: 'audio/mpeg'
-            });
-            form.append('model', model);
-
-            const altRes = await axios.post(
-                'https://api.siputzx.my.id/api/ai/voice-cover',
-                form,
-                {
-                    headers: form.getHeaders(),
-                    timeout: 120000
-                }
-            );
-
-            if (altRes.data?.url) {
-                return altRes.data.url;
-            }
-        } catch { }
-
+        console.log('VoiceCover error:', err.message);
         return null;
     }
 }

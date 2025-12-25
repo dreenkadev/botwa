@@ -5,91 +5,67 @@ const { reactProcessing, reactDone } = require('../../utils/reaction');
 module.exports = {
     name: 'snackvideo',
     aliases: ['snack', 'sv'],
-    description: 'Download video from Snack Video',
+    description: 'download snack video',
 
     async execute(sock, msg, { chatId, args }) {
         try {
             const url = args[0];
 
-            if (!url || !url.includes('snack')) {
+            if (!url || !url.includes('snackvideo')) {
                 await sock.sendMessage(chatId, {
-                    text: '*📹 SNACK VIDEO DOWNLOADER*\n\nUsage: .snackvideo <url>\n\nExample:\n.snackvideo https://s.snackvideo.com/xxx'
+                    text: 'snackvideo\n\n.snackvideo <url>\n\ncontoh:\n.snackvideo https://s.snackvideo.com/xxx'
                 }, { quoted: msg });
                 return;
             }
 
             await reactProcessing(sock, msg);
 
-            const result = await downloadSnackVideo(url);
+            const result = await downloadSnack(url);
 
             await reactDone(sock, msg);
 
-            if (!result || !result.videoUrl) {
+            if (result?.url) {
+                const videoRes = await axios.get(result.url, {
+                    responseType: 'arraybuffer',
+                    timeout: 60000
+                });
+
                 await sock.sendMessage(chatId, {
-                    text: '❌ Gagal download video. Pastikan URL valid.'
+                    video: Buffer.from(videoRes.data),
+                    caption: result.caption || 'snackvideo'
                 }, { quoted: msg });
-                return;
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: 'gagal download snackvideo'
+                }, { quoted: msg });
             }
-
-            // Download video buffer
-            const videoRes = await axios.get(result.videoUrl, {
-                responseType: 'arraybuffer',
-                timeout: 60000
-            });
-
-            const caption = `*📹 SNACK VIDEO*\n\n` +
-                `👤 *Author:* ${result.author || 'Unknown'}\n` +
-                `📝 *Title:* ${result.title || 'No title'}\n` +
-                `❤️ *Likes:* ${result.likes || '0'}`;
-
-            await sock.sendMessage(chatId, {
-                video: Buffer.from(videoRes.data),
-                caption
-            }, { quoted: msg });
-
         } catch (err) {
             await reactDone(sock, msg);
             await sock.sendMessage(chatId, {
-                text: '❌ Error: ' + err.message
+                text: 'error: ' + err.message
             }, { quoted: msg });
         }
     }
 };
 
-async function downloadSnackVideo(url) {
-    try {
-        // Try API 1
-        const res = await axios.get(`https://api.siputzx.my.id/api/d/snackvideo?url=${encodeURIComponent(url)}`, {
-            timeout: 15000
-        });
+async function downloadSnack(url) {
+    const apis = [
+        `https://api.tiklydown.eu.org/api/download/snackvideo?url=${encodeURIComponent(url)}`,
+        `https://api.siputzx.my.id/api/dl/snackvideo?url=${encodeURIComponent(url)}`
+    ];
 
-        if (res.data?.status && res.data?.data) {
-            const data = res.data.data;
-            return {
-                videoUrl: data.video_url || data.url,
-                author: data.author?.username || data.author,
-                title: data.title || data.caption,
-                likes: data.like_count || data.likes
-            };
-        }
+    for (const apiUrl of apis) {
+        try {
+            const res = await axios.get(apiUrl, { timeout: 15000 });
 
-        // Try API 2 (fallback)
-        const res2 = await axios.get(`https://api.tiklydown.eu.org/api/download/snackvideo?url=${encodeURIComponent(url)}`, {
-            timeout: 15000
-        });
-
-        if (res2.data?.video) {
-            return {
-                videoUrl: res2.data.video,
-                author: res2.data.author,
-                title: res2.data.title,
-                likes: res2.data.likes
-            };
-        }
-
-        return null;
-    } catch (err) {
-        console.log('Snack Video error:', err.message);
-        return null;
+            if (res.data?.result?.video || res.data?.data?.video) {
+                return {
+                    url: res.data.result?.video || res.data.data?.video,
+                    caption: res.data.result?.title || res.data.data?.title || ''
+                };
+            }
+        } catch { }
     }
+
+    return null;
 }

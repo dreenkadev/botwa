@@ -1,40 +1,37 @@
-// songgenerator - AI Song Generator dari text prompt
+// songgenerator - AI Song Generator
 const axios = require('axios');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
 
 module.exports = {
     name: 'songgenerator',
     aliases: ['aisong', 'songai', 'createmusic'],
-    description: 'Generate lagu dari text prompt menggunakan AI',
+    description: 'generate lagu dari text prompt',
 
     async execute(sock, msg, { chatId, args, quotedText }) {
         try {
             const prompt = args.join(' ') || quotedText;
-            
+
             if (!prompt) {
                 await sock.sendMessage(chatId, {
-                    text: '*🎵 AI SONG GENERATOR*\n\nUsage: .songgenerator <prompt>\n\n*Example:*\n.songgenerator happy pop song about summer\n.songgenerator sad ballad about lost love\n.songgenerator energetic EDM for workout\n\n⚠️ Proses generate bisa memakan waktu 1-3 menit.'
+                    text: 'songgenerator\n\n.songgenerator <prompt>\n\ncontoh:\n.songgenerator happy pop song\n.songgenerator sad ballad'
                 }, { quoted: msg });
                 return;
             }
 
             await reactProcessing(sock, msg);
             await sock.sendMessage(chatId, {
-                text: '⏳ Generating song... Proses ini bisa memakan waktu 1-3 menit.'
+                text: 'generating song... (1-3 menit)'
             }, { quoted: msg });
 
             const result = await generateSong(prompt);
 
             await reactDone(sock, msg);
 
-            if (result && result.audio) {
-                // Download audio
+            if (result?.audio) {
                 const audioRes = await axios.get(result.audio, {
                     responseType: 'arraybuffer',
                     timeout: 120000
                 });
-
-                const caption = `🎵 *AI Generated Song*\n\n${result.title ? `📝 Title: ${result.title}\n` : ''}📝 Prompt: ${prompt}`;
 
                 await sock.sendMessage(chatId, {
                     audio: Buffer.from(audioRes.data),
@@ -43,18 +40,17 @@ module.exports = {
                 }, { quoted: msg });
 
                 await sock.sendMessage(chatId, {
-                    text: caption
+                    text: `ai song\nprompt: ${prompt}`
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Gagal generate song. ' + (result?.error || 'Coba lagi nanti.')
+                    text: 'gagal generate song. ' + (result?.error || 'coba lagi')
                 }, { quoted: msg });
             }
-
         } catch (err) {
             await reactDone(sock, msg);
             await sock.sendMessage(chatId, {
-                text: '❌ Error: ' + err.message
+                text: 'error: ' + err.message
             }, { quoted: msg });
         }
     }
@@ -62,20 +58,15 @@ module.exports = {
 
 async function generateSong(prompt) {
     try {
-        // API 1: TermAI Song Generator
         const response = await axios.post(
             'https://api.termai.cc/api/audioProcessing/song-generator',
             {},
             {
-                params: {
-                    prompt: prompt,
-                    key: 'TermAI-guest'
-                },
-                timeout: 180000 // 3 minutes
+                params: { prompt: prompt, key: 'TermAI-guest' },
+                timeout: 180000
             }
         );
 
-        // Handle SSE / streaming response
         if (typeof response.data === 'string') {
             const matches = response.data.match(/data: (.+)/g);
             if (matches) {
@@ -83,10 +74,7 @@ async function generateSong(prompt) {
                     try {
                         const data = JSON.parse(match.replace('data: ', ''));
                         if (data.status === 'success' && data.result) {
-                            return {
-                                audio: data.result,
-                                title: data.title
-                            };
+                            return { audio: data.result };
                         }
                     } catch { }
                 }
@@ -94,24 +82,16 @@ async function generateSong(prompt) {
         }
 
         if (response.data?.result) {
-            return {
-                audio: response.data.result,
-                title: response.data.title
-            };
+            return { audio: response.data.result };
         }
+    } catch { }
 
-        // Fallback API
+    try {
         const fallbackRes = await axios.get(`https://api.siputzx.my.id/api/ai/suno?prompt=${encodeURIComponent(prompt)}`, {
             timeout: 180000
         });
+        if (fallbackRes.data?.url) return { audio: fallbackRes.data.url };
+    } catch { }
 
-        if (fallbackRes.data?.url) {
-            return { audio: fallbackRes.data.url };
-        }
-
-        return { error: 'No result from API' };
-    } catch (err) {
-        console.log('Song Generator error:', err.message);
-        return { error: err.message };
-    }
+    return { error: 'no result' };
 }

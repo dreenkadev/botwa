@@ -1,119 +1,96 @@
-// img2video - Convert image to AI-generated video (Luma AI style)
+// img2video - Convert image to AI video
 const axios = require('axios');
+const FormData = require('form-data');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
 
 module.exports = {
     name: 'img2video',
-    aliases: ['i2v', 'imgvideo', 'animate'],
-    description: 'Convert image to animated video using AI',
+    aliases: ['i2v', 'animasi'],
+    description: 'convert image to AI video',
 
     async execute(sock, msg, { chatId, args, mediaMessage }) {
         try {
-            // Check for quoted image
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const imageMsg = mediaMessage?.imageMessage || quotedMsg?.imageMessage;
+            const imageMsg = mediaMessage?.message?.imageMessage || quotedMsg?.imageMessage;
+            const prompt = args.join(' ') || 'make it move naturally';
 
             if (!imageMsg) {
                 await sock.sendMessage(chatId, {
-                    text: `*🎬 IMAGE TO VIDEO*\n\nReply gambar dengan:\n.img2video [prompt]\n\n*Examples:*\nReply gambar + .img2video\nReply gambar + .img2video zoom in slowly\nReply gambar + .img2video camera pan right`
+                    text: 'img2video\n\nreply gambar + .img2video [prompt]\n\ncontoh:\n.img2video\n.img2video zoom in slowly'
                 }, { quoted: msg });
                 return;
             }
 
-            const prompt = args.join(' ') || 'smooth animation';
-
             await reactProcessing(sock, msg);
             await sock.sendMessage(chatId, {
-                text: '⏳ Generating video... Ini mungkin memakan waktu 30-60 detik.'
+                text: 'generating video... (1-2 menit)'
             }, { quoted: msg });
 
-            // Download image from message
-            const stream = await sock.downloadMediaMessage(
-                quotedMsg ? { message: quotedMsg } : msg
-            );
-            const imageBuffer = Buffer.isBuffer(stream) ? stream : Buffer.from(stream);
+            const targetMsg = quotedMsg ? { message: quotedMsg } : msg;
+            const imageBuffer = await downloadMediaMessage(targetMsg, 'buffer', {});
 
-            // Generate video
-            const videoUrl = await generateVideo(imageBuffer, prompt);
+            const result = await imageToVideo(imageBuffer, prompt);
 
             await reactDone(sock, msg);
 
-            if (videoUrl) {
-                // Download video
-                const videoRes = await axios.get(videoUrl, {
+            if (result?.url) {
+                const videoRes = await axios.get(result.url, {
                     responseType: 'arraybuffer',
                     timeout: 120000
                 });
 
                 await sock.sendMessage(chatId, {
                     video: Buffer.from(videoRes.data),
-                    caption: `✨ *Image to Video*\n📝 Prompt: ${prompt}`
+                    caption: 'img2video'
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Gagal generate video. Coba lagi nanti.'
+                    text: 'gagal generate video'
                 }, { quoted: msg });
             }
         } catch (err) {
             await reactDone(sock, msg);
             await sock.sendMessage(chatId, {
-                text: '❌ Error: ' + err.message
+                text: 'error: ' + err.message
             }, { quoted: msg });
         }
     }
 };
 
-async function generateVideo(imageBuffer, prompt) {
+async function imageToVideo(imageBuffer, prompt) {
     try {
-        // API 1: Try TermAI Luma
-        const response = await axios.post(
-            'https://api.termai.cc/api/img2video/luma',
-            imageBuffer,
-            {
-                params: { key: 'TermAI-guest' },
-                headers: { 'Content-Type': 'application/octet-stream' },
-                timeout: 120000
-            }
-        );
+        // Upload image
+        const form = new FormData();
+        form.append('file', imageBuffer, { filename: 'image.jpg' });
 
-        // Parse SSE response
-        if (typeof response.data === 'string') {
-            const lines = response.data.split('\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.replace('data: ', ''));
-                        if (data.status === 'completed' && data.video?.url) {
-                            return data.video.url;
-                        }
-                    } catch { }
-                }
-            }
-        }
-
-        if (response.data?.video?.url) {
-            return response.data.video.url;
-        }
-
-        // API 2: Alternative img2video
-        const form = new (require('form-data'))();
-        form.append('image', imageBuffer, {
-            filename: 'image.jpg',
-            contentType: 'image/jpeg'
+        const uploadRes = await axios.post('https://api.termai.cc/upload', form, {
+            headers: { ...form.getHeaders() },
+            timeout: 30000
         });
-        form.append('prompt', prompt);
 
-        const altRes = await axios.post(
-            'https://api.siputzx.my.id/api/ai/img2video',
-            form,
-            {
-                headers: form.getHeaders(),
-                timeout: 120000
+        if (!uploadRes.data?.url) return null;
+
+        // Generate video
+        const genRes = await axios.post('https://api.termai.cc/api/luma/image-to-video', {
+            image: uploadRes.data.url,
+            prompt: prompt,
+            key: 'TermAI-guest'
+        }, { timeout: 30000 });
+
+        if (!genRes.data?.id) return null;
+
+        // Poll for result
+        for (let i = 0; i < 40; i++) {
+            await new Promise(r => setTimeout(r, 5000));
+
+            const resultRes = await axios.get(`https://api.termai.cc/api/luma/status/${genRes.data.id}?key=TermAI-guest`, {
+                timeout: 15000
+            });
+
+            if (resultRes.data?.video) {
+                return { url: resultRes.data.video };
             }
-        );
-
-        if (altRes.data?.url) {
-            return altRes.data.url;
         }
 
         return null;

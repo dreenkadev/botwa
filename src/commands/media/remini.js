@@ -1,164 +1,96 @@
-// remini - AI image enhancer (upscale & enhance quality)
+// remini - AI image enhancement (upscale, recolor, dehaze)
 const axios = require('axios');
 const FormData = require('form-data');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
+
+const MODES = ['enhance', 'recolor', 'dehaze'];
 
 module.exports = {
     name: 'remini',
-    aliases: ['enhance', 'upscale', 'hd'],
-    description: 'Enhance/upscale image quality using AI',
+    aliases: ['upscale', 'enhance', 'hdr'],
+    description: 'ai image enhancement',
 
     async execute(sock, msg, { chatId, args, mediaMessage }) {
         try {
-            // Check for quoted image
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const imageMsg = mediaMessage?.imageMessage || quotedMsg?.imageMessage;
+            const imageMsg = mediaMessage?.message?.imageMessage || quotedMsg?.imageMessage;
+            const mode = args[0]?.toLowerCase() || 'enhance';
 
-            if (!imageMsg) {
+            if (!MODES.includes(mode)) {
                 await sock.sendMessage(chatId, {
-                    text: '*🔮 REMINI - AI Image Enhancer*\n\nReply gambar dengan:\n.remini - Enhance quality\n.remini recolor - Colorize B&W\n.remini dehaze - Remove haze/fog'
+                    text: `remini\n\nreply gambar + .remini [mode]\n\nmodes: ${MODES.join(', ')}\n\ncontoh:\n.remini enhance\n.remini recolor`
                 }, { quoted: msg });
                 return;
             }
 
-            // Parse enhancement type
-            const mode = args[0]?.toLowerCase() || 'enhance';
-            const validModes = ['enhance', 'recolor', 'dehaze'];
-            const selectedMode = validModes.includes(mode) ? mode : 'enhance';
+            if (!imageMsg) {
+                await sock.sendMessage(chatId, {
+                    text: 'reply gambar dengan: .remini ' + mode
+                }, { quoted: msg });
+                return;
+            }
 
             await reactProcessing(sock, msg);
 
-            // Download image from message
-            const stream = await sock.downloadMediaMessage(
-                quotedMsg ? { message: quotedMsg } : msg
-            );
-            const imageBuffer = Buffer.isBuffer(stream) ? stream : Buffer.from(stream);
+            const targetMsg = quotedMsg ? { message: quotedMsg } : msg;
+            const imageBuffer = await downloadMediaMessage(targetMsg, 'buffer', {});
 
-            // Try multiple APIs
-            let result = null;
-
-            // API 1: Vyro AI (Remini-like)
-            if (!result) {
-                result = await tryVyroAPI(imageBuffer, selectedMode);
-            }
-
-            // API 2: Alternative enhancer
-            if (!result) {
-                result = await tryDeepAI(imageBuffer);
-            }
-
-            // API 3: Replicate (fallback)
-            if (!result) {
-                result = await tryUpscaler(imageBuffer);
-            }
+            const result = await enhanceImage(imageBuffer, mode);
 
             await reactDone(sock, msg);
 
             if (result) {
                 await sock.sendMessage(chatId, {
                     image: result,
-                    caption: `✨ *Enhanced!*\nMode: ${selectedMode}`
+                    caption: `enhanced: ${mode}`
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Gagal enhance gambar. Coba lagi nanti.'
+                    text: 'gagal enhance gambar'
                 }, { quoted: msg });
             }
         } catch (err) {
             await reactDone(sock, msg);
             await sock.sendMessage(chatId, {
-                text: '❌ Error: ' + err.message
+                text: 'error: ' + err.message
             }, { quoted: msg });
         }
     }
 };
 
-// Vyro AI API (Remini clone)
-async function tryVyroAPI(imageBuffer, mode) {
+async function enhanceImage(imageBuffer, mode) {
+    // API 1: Vyro AI
     try {
         const form = new FormData();
+        form.append('image', imageBuffer, { filename: 'image.jpg' });
         form.append('model_version', '1');
-        form.append('image', imageBuffer, {
-            filename: 'image.jpg',
-            contentType: 'image/jpeg'
+
+        const res = await axios.post(`https://inferenceengine.vyro.ai/${mode}`, form, {
+            headers: { ...form.getHeaders() },
+            responseType: 'arraybuffer',
+            timeout: 60000
         });
 
-        const response = await axios.post(
-            `https://inferenceengine.vyro.ai/${mode}`,
-            form,
-            {
-                headers: {
-                    ...form.getHeaders(),
-                    'User-Agent': 'okhttp/4.9.3',
-                    'Connection': 'Keep-Alive',
-                    'Accept-Encoding': 'gzip'
-                },
-                responseType: 'arraybuffer',
-                timeout: 60000
-            }
-        );
-
-        if (response.data && response.data.byteLength > 1000) {
-            return Buffer.from(response.data);
-        }
+        if (res.data) return Buffer.from(res.data);
     } catch { }
-    return null;
-}
 
-// DeepAI upscaler
-async function tryDeepAI(imageBuffer) {
+    // API 2: DeepAI
     try {
-        const form = new FormData();
-        form.append('image', imageBuffer, {
-            filename: 'image.jpg',
-            contentType: 'image/jpeg'
+        const form2 = new FormData();
+        form2.append('image', imageBuffer, { filename: 'image.jpg' });
+
+        const endpoint = mode === 'recolor' ? 'colorizer' : 'torch-srgan';
+        const res2 = await axios.post(`https://api.deepai.org/api/${endpoint}`, form2, {
+            headers: { ...form2.getHeaders(), 'api-key': 'quickstart-QUdJIGlzIGNvbWluZy4uLi4K' },
+            timeout: 60000
         });
 
-        const response = await axios.post(
-            'https://api.deepai.org/api/torch-srgan',
-            form,
-            {
-                headers: {
-                    ...form.getHeaders(),
-                    'api-key': 'quickstart-QUdJIGlzIGNvbWluZy4uLi4K'
-                },
-                timeout: 60000
-            }
-        );
-
-        if (response.data?.output_url) {
-            const imgRes = await axios.get(response.data.output_url, {
-                responseType: 'arraybuffer',
-                timeout: 30000
-            });
+        if (res2.data?.output_url) {
+            const imgRes = await axios.get(res2.data.output_url, { responseType: 'arraybuffer' });
             return Buffer.from(imgRes.data);
         }
     } catch { }
-    return null;
-}
 
-// Simple upscaler fallback
-async function tryUpscaler(imageBuffer) {
-    try {
-        const form = new FormData();
-        form.append('image', imageBuffer, {
-            filename: 'image.jpg',
-            contentType: 'image/jpeg'
-        });
-        form.append('scale', '2');
-
-        const response = await axios.post(
-            'https://api.imgbb.com/1/upload',
-            form,
-            {
-                params: { key: '5e0fb8f66b8d2e3e3e0fb8f66b8d2e3e' },
-                headers: form.getHeaders(),
-                timeout: 30000
-            }
-        );
-
-        // Just return original if upload succeeds (placeholder)
-        return imageBuffer;
-    } catch { }
     return null;
 }
