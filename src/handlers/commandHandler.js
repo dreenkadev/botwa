@@ -1,6 +1,7 @@
 const config = require('../../config');
 const fs = require('fs');
 const path = require('path');
+const { wrapSocket } = require('../utils/responseWrapper');
 
 const CATEGORIES = ['general', 'owner', 'group', 'moderation', 'media', 'utility', 'fun', 'ai'];
 const commandsBaseDir = path.join(__dirname, '..', 'commands');
@@ -53,21 +54,24 @@ async function handleCommand(sock, msg, context) {
 
     if (!cmd) return;
 
+    // Wrap socket untuk auto-append signature (kecuali command yang noSignature)
+    const wrappedSock = cmd.noSignature ? sock : wrapSocket(sock);
+
     // permission checks - fast
     if (cmd.ownerOnly && !isOwner) {
-        sock.sendMessage(chatId, { text: 'owner only' }, { quoted: msg }).catch(() => { });
+        wrappedSock.sendMessage(chatId, { text: 'owner only' }, { quoted: msg }).catch(() => { });
         return;
     }
 
     if (cmd.groupOnly && !isGroup) {
-        sock.sendMessage(chatId, { text: 'group only' }, { quoted: msg }).catch(() => { });
+        wrappedSock.sendMessage(chatId, { text: 'group only' }, { quoted: msg }).catch(() => { });
         return;
     }
 
     if (cmd.adminOnly && isGroup && !isOwner) {
         const isAdmin = await checkAdminCached(sock, chatId, senderId);
         if (!isAdmin) {
-            sock.sendMessage(chatId, { text: 'admin only' }, { quoted: msg }).catch(() => { });
+            wrappedSock.sendMessage(chatId, { text: 'admin only' }, { quoted: msg }).catch(() => { });
             return;
         }
     }
@@ -78,15 +82,15 @@ async function handleCommand(sock, msg, context) {
         quotedText = quotedMsg.conversation || quotedMsg.extendedTextMessage?.text || null;
     }
 
-    // execute command
+    // execute command with wrapped socket
     try {
-        await cmd.execute(sock, msg, {
+        await cmd.execute(wrappedSock, msg, {
             args, senderId, chatId, isGroup, isOwner,
             quotedMsg, quotedText, mediaMessage, prefix: config.prefix
         });
     } catch (err) {
         console.error(`[${cmdName}]`, err.message);
-        sock.sendMessage(chatId, { text: 'error' }, { quoted: msg }).catch(() => { });
+        wrappedSock.sendMessage(chatId, { text: 'error' }, { quoted: msg }).catch(() => { });
     }
 }
 
