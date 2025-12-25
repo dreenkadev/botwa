@@ -7,10 +7,15 @@ const { getGroupSettings } = require('../utils/groupSettings');
 const { handleToxicFilter } = require('../services/moderationService');
 const { updateOwnerActivity, handleOwnerAutoReply } = require('../core/autoReply');
 const { getAfk, removeAfk, formatAfkDuration } = require('../utils/afk');
+const { isRentalActive, formatExpiryMessage, getRentalInfo } = require('../utils/rental');
 
 // cache untuk group metadata - mengurangi API calls
 const groupMetaCache = new Map();
 const CACHE_TTL = 60000; // 1 menit
+
+// Cache untuk rental warning (tidak spam pesan)
+const rentalWarningCache = new Map();
+const RENTAL_WARNING_INTERVAL = 6 * 60 * 60 * 1000; // 6 jam sekali
 
 function getCachedGroupMeta(chatId) {
     const cached = groupMetaCache.get(chatId);
@@ -65,6 +70,37 @@ async function handleMessage(sock, msg) {
 
     // update owner activity - sync
     if (isOwner) updateOwnerActivity();
+
+    // RENTAL CHECK (skip for owner and allowed commands)
+    const allowedRentalCmds = ['sewa', 'masa', 'rent', 'price', 'harga', 'expire', 'remaining'];
+    const cmdName = text.startsWith(config.prefix) ? text.slice(config.prefix.length).split(/\s+/)[0]?.toLowerCase() : '';
+    const isAllowedCmd = allowedRentalCmds.includes(cmdName);
+
+    if (!isOwner && !isAllowedCmd && config.rentalMode) {
+        const rentalActive = isRentalActive(chatId);
+
+        if (!rentalActive) {
+            // Check if we should send warning (rate limit)
+            const lastWarning = rentalWarningCache.get(chatId) || 0;
+            if (Date.now() - lastWarning > RENTAL_WARNING_INTERVAL) {
+                rentalWarningCache.set(chatId, Date.now());
+                const expiryMsg = formatExpiryMessage(0, true);
+                sock.sendMessage(chatId, { text: expiryMsg }).catch(() => { });
+            }
+            return; // Block command
+        }
+
+        // Check if near expiry (warning)
+        const info = getRentalInfo(chatId);
+        if (info && info.daysRemaining <= 3) {
+            const lastWarning = rentalWarningCache.get(chatId + '_warn') || 0;
+            if (Date.now() - lastWarning > RENTAL_WARNING_INTERVAL) {
+                rentalWarningCache.set(chatId + '_warn', Date.now());
+                const warnMsg = formatExpiryMessage(info.daysRemaining, false);
+                sock.sendMessage(chatId, { text: warnMsg }).catch(() => { });
+            }
+        }
+    }
 
     // PRIORITY: handle command FIRST - fastest response
     if (text.startsWith(config.prefix)) {

@@ -8,6 +8,9 @@ module.exports = {
 
     mode: 'private',
 
+    // Rental Mode - set true for rental bot (bot only works for paying users)
+    rentalMode: false,
+
     cooldown: {
         duration: 5000,
         maxWarnings: 3,
