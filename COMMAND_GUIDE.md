@@ -1,9 +1,9 @@
 # 📖 DreenkaBot-WA Command Guide
-## Panduan Lengkap Penggunaan Semua Command (146+ Commands)
+## Panduan Lengkap Penggunaan Semua Command (155+ Commands)
 
 **Prefix:** `.` (titik)
 **Owner:** @Dreenka
-**Total Commands:** 146+
+**Total Commands:** 155+
 
 ---
 
@@ -54,6 +54,18 @@
 | `.runtime` | Lihat uptime bot | `.runtime` |
 | `.server` | Info server | `.server` |
 | `.shutdown` | Matikan bot | `.shutdown` |
+| `.autostory` | Auto post ke status WA | `.autostory at 10:00 caption` |
+| `.setspecial` | Set pesan khusus untuk contact | `.setspecial add 628xxx Nama \| Pesan` |
+
+### 💰 RENTAL/SEWA SYSTEM
+
+| Command | Deskripsi | Contoh |
+|---------|-----------|--------|
+| `.sewa` | Lihat harga sewa bot | `.sewa` |
+| `.masa` | Cek sisa masa sewa | `.masa` |
+| `.addsewa <hari>` | Tambah sewa (owner) | `.addsewa 30` |
+| `.listsewa` | List semua customer (owner) | `.listsewa` |
+| `.setsewa` | Atur payment info (owner) | `.setsewa bank BCA 123 Nama` |
 
 ---
 
@@ -328,10 +340,11 @@
 
 ## 📊 STATISTIK BOT
 
-- **Total Commands:** 146+
+- **Total Commands:** 155+
 - **Game Data:** 3000+ soal
-- **AI Models:** 6 (GPT, Veo3, ElevenLabs, dll)
-- **Downloader:** 8 platform
+- **AI Models:** 6 (GPT, Shion, ElevenLabs, dll)
+- **Downloader:** 9 platform
+- **Rental System:** Built-in
 
 ---
 

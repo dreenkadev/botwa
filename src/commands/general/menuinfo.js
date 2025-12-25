@@ -167,13 +167,22 @@ const commandInfo = {
     'setbio': 'ganti bio bot',
     'mode': 'ganti mode bot public/self',
     'public': 'mode publik',
-    'self': 'mode self only'
+    'self': 'mode self only',
+    'autostory': 'auto post ke status WA (jadwal/repeat)',
+    'setspecial': 'set pesan khusus untuk special contact',
+
+    // rental system
+    'sewa': 'lihat harga sewa bot',
+    'masa': 'cek sisa masa sewa',
+    'addsewa': 'tambah/perpanjang sewa (owner)',
+    'listsewa': 'list semua customer sewa (owner)',
+    'setsewa': 'atur harga dan payment info (owner)'
 };
 
 module.exports = {
     name: 'menuinfo',
     aliases: ['mi', 'cmdinfo', 'ci'],
-    description: 'info singkat tentang command (146+ commands)',
+    description: 'info singkat tentang command (155+ commands)',
 
     async execute(sock, msg, { chatId, args }) {
         try {

@@ -3,10 +3,15 @@
  * - Detects and deletes messages containing toxic/bad words
  * - Sends warning to sender
  * - Only works in groups where bot is admin
+ * - DOES NOT apply to group admins
+ * - Words can be added/removed dynamically
  */
 
-// Daftar kata toxic (mudah ditambah)
-const TOXIC_WORDS = [
+const fs = require('fs');
+const path = require('path');
+
+// Default toxic words
+const DEFAULT_TOXIC_WORDS = [
     // Indonesian
     'anjing', 'bangsat', 'bajingan', 'babi', 'kontol', 'memek', 'ngentot',
     'tolol', 'goblok', 'idiot', 'bodoh', 'tai', 'bego', 'kampret',
@@ -17,16 +22,86 @@ const TOXIC_WORDS = [
     'whore', 'slut', 'damn', 'cunt', 'nigger', 'faggot'
 ];
 
-// Compile regex untuk performa
-const toxicRegex = new RegExp(
-    TOXIC_WORDS.map(word => `\\b${word}\\b`).join('|'),
-    'i'
-);
+// Path for custom words
+const customWordsPath = path.join(__dirname, '..', 'database', 'toxic_words.json');
+
+// Load custom words
+let customWords = [];
+function loadCustomWords() {
+    try {
+        if (fs.existsSync(customWordsPath)) {
+            customWords = JSON.parse(fs.readFileSync(customWordsPath, 'utf8'));
+        }
+    } catch { customWords = []; }
+}
+
+function saveCustomWords() {
+    try {
+        const dir = path.dirname(customWordsPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(customWordsPath, JSON.stringify(customWords, null, 2));
+    } catch { }
+}
+
+// Get all toxic words (default + custom)
+function getAllToxicWords() {
+    loadCustomWords();
+    return [...new Set([...DEFAULT_TOXIC_WORDS, ...customWords])];
+}
+
+// Add custom word
+function addToxicWord(word) {
+    loadCustomWords();
+    const w = word.toLowerCase().trim();
+    if (!customWords.includes(w)) {
+        customWords.push(w);
+        saveCustomWords();
+        rebuildRegex();
+        return true;
+    }
+    return false;
+}
+
+// Remove custom word
+function removeToxicWord(word) {
+    loadCustomWords();
+    const w = word.toLowerCase().trim();
+    const idx = customWords.indexOf(w);
+    if (idx !== -1) {
+        customWords.splice(idx, 1);
+        saveCustomWords();
+        rebuildRegex();
+        return true;
+    }
+    return false;
+}
+
+// Get custom words only
+function getCustomWords() {
+    loadCustomWords();
+    return customWords;
+}
+
+// Compile regex
+let toxicRegex = null;
+function rebuildRegex() {
+    const words = getAllToxicWords();
+    toxicRegex = new RegExp(
+        words.map(word => `\\b${word}\\b`).join('|'),
+        'i'
+    );
+}
+
+// Initialize regex
+loadCustomWords();
+rebuildRegex();
+
+// Cache group admins
+const adminCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Check if text contains toxic words
- * @param {string} text - Message text to check
- * @returns {boolean}
  */
 function containsToxicWord(text) {
     if (!text || typeof text !== 'string') return false;
@@ -34,38 +109,59 @@ function containsToxicWord(text) {
 }
 
 /**
- * Handle toxic message in group
- * @param {object} sock - Baileys socket
- * @param {object} msg - Message object
- * @param {string} chatId - Group ID
- * @param {string} senderId - Sender ID
- * @param {string} text - Message text
- * @returns {Promise<boolean>} - true if message was toxic and handled
+ * Get group admins (with cache)
  */
-async function handleToxicFilter(sock, msg, chatId, senderId, text) {
-    // Only check text messages
-    if (!text) return false;
-
-    // Check for toxic words
-    if (!containsToxicWord(text)) return false;
+async function getGroupAdmins(sock, groupId) {
+    const cached = adminCache.get(groupId);
+    if (cached && Date.now() - cached.time < CACHE_TTL) {
+        return cached.admins;
+    }
 
     try {
-        // Try to delete the message (requires bot to be admin)
-        await sock.sendMessage(chatId, {
-            delete: msg.key
-        });
+        const metadata = await sock.groupMetadata(groupId);
+        const admins = metadata.participants
+            .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+            .map(p => p.id);
 
-        // Send warning to sender
+        adminCache.set(groupId, { admins, time: Date.now() });
+        return admins;
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Check if user is admin
+ */
+async function isGroupAdmin(sock, groupId, userId) {
+    const admins = await getGroupAdmins(sock, groupId);
+    return admins.includes(userId);
+}
+
+/**
+ * Handle toxic message in group
+ */
+async function handleToxicFilter(sock, msg, chatId, senderId, text) {
+    if (!text) return false;
+
+    if (!containsToxicWord(text)) return false;
+
+    // Skip if sender is admin
+    const isAdmin = await isGroupAdmin(sock, chatId, senderId);
+    if (isAdmin) return false;
+
+    try {
+        await sock.sendMessage(chatId, { delete: msg.key });
+
         const senderNum = senderId.split('@')[0];
         await sock.sendMessage(chatId, {
-            text: `@${senderNum} Pesan dihapus karena mengandung kata tidak pantas.\n\n${require('../../config').signature}`,
+            text: `@${senderNum} pesan dihapus karena mengandung kata tidak pantas.\n\n${require('../../config').signature}`,
             mentions: [senderId]
         });
 
         console.log(`[ToxicFilter] Deleted message from ${senderNum}`);
         return true;
     } catch (err) {
-        // Bot mungkin bukan admin, skip saja
         console.log(`[ToxicFilter] Cannot delete: ${err.message}`);
         return false;
     }
@@ -73,8 +169,6 @@ async function handleToxicFilter(sock, msg, chatId, senderId, text) {
 
 /**
  * Check if toxic filter is enabled for group
- * @param {string} groupId 
- * @returns {boolean}
  */
 function isToxicFilterEnabled(groupId) {
     const { getGroupSettings } = require('../utils/groupSettings');
@@ -83,8 +177,13 @@ function isToxicFilterEnabled(groupId) {
 }
 
 module.exports = {
-    TOXIC_WORDS,
+    DEFAULT_TOXIC_WORDS,
     containsToxicWord,
     handleToxicFilter,
-    isToxicFilterEnabled
+    isToxicFilterEnabled,
+    isGroupAdmin,
+    getAllToxicWords,
+    getCustomWords,
+    addToxicWord,
+    removeToxicWord
 };
