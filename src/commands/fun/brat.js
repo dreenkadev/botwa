@@ -1,5 +1,5 @@
+// brat sticker - simple text on white background
 const sharp = require('sharp');
-const axios = require('axios');
 
 module.exports = {
     name: 'brat',
@@ -22,22 +22,14 @@ module.exports = {
         }
 
         try {
-            // Try API first (more reliable on cloud without fonts)
-            let stickerBuffer = await generateFromAPI(text);
-
-            // Fallback to local SVG if API fails
-            if (!stickerBuffer) {
-                stickerBuffer = await generateLocal(text);
-            }
-
-            if (!stickerBuffer) {
-                throw new Error('Failed to generate');
-            }
+            // Generate simple text image using sharp with embedded font-free approach
+            const stickerBuffer = await generateBratSticker(text);
 
             await sock.sendMessage(chatId, {
                 sticker: stickerBuffer
             }, { quoted: msg });
         } catch (err) {
+            console.log('Brat error:', err.message);
             await sock.sendMessage(chatId, {
                 text: 'Failed to create sticker\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
             }, { quoted: msg });
@@ -45,88 +37,48 @@ module.exports = {
     }
 };
 
-// Generate using external API
-async function generateFromAPI(text) {
-    try {
-        // Brat-style generator API
-        const apiUrl = `https://brat.caliphdev.com/api/brat?text=${encodeURIComponent(text)}`;
-        const response = await axios.get(apiUrl, {
-            responseType: 'arraybuffer',
-            timeout: 10000
-        });
+async function generateBratSticker(text) {
+    const width = 512;
+    const height = 512;
+    const padding = 40;
 
-        return await sharp(Buffer.from(response.data))
-            .resize(512, 512)
-            .webp({ quality: 90 })
-            .toBuffer();
-    } catch {
-        // Try alternative API
-        try {
-            const altUrl = `https://api.lolhuman.xyz/api/brat?apikey=GatauDeh&text=${encodeURIComponent(text)}`;
-            const response = await axios.get(altUrl, {
-                responseType: 'arraybuffer',
-                timeout: 10000
-            });
+    // Calculate font size based on text length
+    let fontSize = Math.min(80, Math.floor(400 / Math.max(text.length / 10, 1)));
+    fontSize = Math.max(fontSize, 24); // minimum font size
 
-            return await sharp(Buffer.from(response.data))
-                .resize(512, 512)
-                .webp({ quality: 90 })
-                .toBuffer();
-        } catch {
-            return null;
-        }
+    // Word wrap
+    const maxCharsPerLine = Math.floor((width - padding * 2) / (fontSize * 0.55));
+    const lines = wrapText(text, maxCharsPerLine);
+
+    // Adjust font size if too many lines
+    const lineHeight = fontSize * 1.3;
+    const totalHeight = lines.length * lineHeight;
+    if (totalHeight > height - padding * 2) {
+        fontSize = Math.floor(fontSize * ((height - padding * 2) / totalHeight));
+        fontSize = Math.max(fontSize, 16);
     }
-}
 
-// Local SVG generation (fallback)
-async function generateLocal(text) {
-    try {
-        const width = 512;
-        const height = 512;
-        const padding = 30;
-        const availableWidth = width - (padding * 2);
-        const availableHeight = height - (padding * 2);
+    // Create SVG with basic font stack that should work everywhere
+    const yStart = (height - lines.length * lineHeight) / 2 + fontSize;
 
-        let fontSize = 100;
-        let lines = [];
-        let fits = false;
+    let textElements = '';
+    lines.forEach((line, i) => {
+        const y = yStart + (i * lineHeight);
+        // Use simple ASCII-safe rendering
+        const escapedLine = escapeXml(line);
+        textElements += `<text x="50%" y="${y}" text-anchor="middle" font-size="${fontSize}" font-weight="bold" fill="#111" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif">${escapedLine}</text>`;
+    });
 
-        while (fontSize > 16 && !fits) {
-            const charsPerLine = Math.floor(availableWidth / (fontSize * 0.52));
-            lines = wrapText(text, charsPerLine);
-            const lineHeight = fontSize * 1.2;
-            const totalHeight = lines.length * lineHeight;
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100%" height="100%" fill="white"/>
+    ${textElements}
+</svg>`;
 
-            if (totalHeight <= availableHeight) {
-                fits = true;
-            } else {
-                fontSize -= 4;
-            }
-        }
-
-        const lineHeight = fontSize * 1.2;
-        const totalTextHeight = lines.length * lineHeight;
-        const startY = padding + (availableHeight - totalTextHeight) / 2 + fontSize * 0.85;
-
-        let textElements = '';
-        lines.forEach((line, index) => {
-            const y = startY + (index * lineHeight);
-            const x = width / 2;
-            textElements += `<text x="${x}" y="${y}" text-anchor="middle" font-family="sans-serif" font-size="${fontSize}" font-weight="bold" fill="black">${escapeXml(line)}</text>`;
-        });
-
-        const svgImage = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-            <rect width="100%" height="100%" fill="white"/>
-            ${textElements}
-        </svg>`;
-
-        return await sharp(Buffer.from(svgImage))
-            .resize(512, 512)
-            .webp({ quality: 90 })
-            .toBuffer();
-    } catch {
-        return null;
-    }
+    return await sharp(Buffer.from(svg))
+        .resize(512, 512)
+        .webp({ quality: 90 })
+        .toBuffer();
 }
 
 function wrapText(text, maxChars) {
@@ -140,7 +92,6 @@ function wrapText(text, maxChars) {
         } else {
             if (currentLine) lines.push(currentLine);
             if (word.length > maxChars) {
-                // Split long words
                 let remaining = word;
                 while (remaining.length > maxChars) {
                     lines.push(remaining.substring(0, maxChars));
@@ -154,7 +105,7 @@ function wrapText(text, maxChars) {
     }
     if (currentLine) lines.push(currentLine);
 
-    return lines;
+    return lines.length > 0 ? lines : [''];
 }
 
 function escapeXml(text) {
