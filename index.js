@@ -16,27 +16,48 @@ const { handleMessage, handleGroupUpdate } = require('./src/handlers/messageHand
 const config = require('./config');
 const { initDatabase } = require('./src/utils/database');
 const { getMode, setMode } = require('./src/core/state');
+const { useMongoDBAuthState, clearMongoDBSession } = require('./src/utils/mongoAuth');
 
 const logger = pino({ level: 'silent' });
 
 let sock = null;
 let reconnectAttempts = 0;
 let currentQR = null; // Store current QR for web access
+let useMongoSession = false; // Track if using MongoDB
 const MAX_RECONNECT = 5;
 
-function hasSession() {
+async function hasSession() {
+    // Check MongoDB first if URI is set
+    if (process.env.MONGODB_URI) {
+        try {
+            const mongoose = require('mongoose');
+            if (mongoose.connection.readyState === 1) {
+                const AuthModel = mongoose.models.Auth;
+                if (AuthModel) {
+                    const creds = await AuthModel.findById('creds');
+                    return !!creds;
+                }
+            }
+        } catch { }
+    }
+    // Fallback to file check
     return fs.existsSync('./session/creds.json');
 }
 
-function clearSession() {
+async function clearSession() {
     try {
+        // Clear MongoDB session if using it
+        if (process.env.MONGODB_URI) {
+            await clearMongoDBSession();
+        }
+        // Also clear file session
         fs.rmSync('./session', { recursive: true, force: true });
         console.log('[*] Session cleared');
     } catch { }
 }
 
 async function startBot() {
-    const isReconnecting = hasSession();
+    const isReconnecting = await hasSession();
     const usePairingCode = process.env.PHONE_NUMBER && !isReconnecting;
 
     if (isReconnecting) {
@@ -64,7 +85,21 @@ async function startBot() {
         console.log(`[*] Baileys v${version.join('.')} ${isLatest ? '(latest)' : ''}`);
         console.log('');
 
-        const { state, saveCreds } = await useMultiFileAuthState('./session');
+        // Try MongoDB first, fallback to file-based
+        let state, saveCreds;
+        if (process.env.MONGODB_URI) {
+            console.log('[*] Using MongoDB for session storage');
+            const mongoAuth = await useMongoDBAuthState();
+            state = mongoAuth.state;
+            saveCreds = mongoAuth.saveCreds;
+            useMongoSession = true;
+        } else {
+            console.log('[*] Using file-based session storage');
+            const fileAuth = await useMultiFileAuthState('./session');
+            state = fileAuth.state;
+            saveCreds = fileAuth.saveCreds;
+        }
+
 
         sock = makeWASocket({
             auth: {
