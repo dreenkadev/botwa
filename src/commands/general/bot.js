@@ -24,7 +24,7 @@ sosmed owner:
 - ig: instagram.com/dreevx_/
 - github: github.com/dreenkadev
 - portofolio: dreenka.vercel.app/
-- gdev: g.dev/dreenka
+- gdev: dreenka
 
 ketik ${config.prefix}menu untuk list command`;
 
