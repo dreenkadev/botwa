@@ -1,10 +1,10 @@
-// leaderboard - ranking user aktif
-const { getLeaderboard } = require('../../utils/groupManager');
+// leaderboard - ranking user berdasarkan coins
+const { getLeaderboard, formatCoins } = require('../../utils/economy');
 
 module.exports = {
     name: 'leaderboard',
     aliases: ['lb', 'top', 'rank'],
-    description: 'ranking user aktif',
+    description: 'ranking user dengan coins terbanyak',
 
     async execute(sock, msg, { chatId, args }) {
         try {
@@ -12,22 +12,27 @@ module.exports = {
             const leaderboard = getLeaderboard(Math.min(limit, 20));
 
             if (leaderboard.length === 0) {
-                await sock.sendMessage(chatId, { text: 'belum ada data aktivitas' }, { quoted: msg });
+                await sock.sendMessage(chatId, {
+                    text: '*🏆 LEADERBOARD*\n\nBelum ada data. Gunakan .daily untuk mulai mengumpulkan coins!'
+                }, { quoted: msg });
                 return;
             }
 
-            let text = `*leaderboard - top ${leaderboard.length}*\n\n`;
+            let text = `*🏆 LEADERBOARD - Top ${leaderboard.length}*\n\n`;
             const mentions = [];
+            const medals = ['🥇', '🥈', '🥉'];
 
             leaderboard.forEach((user, i) => {
-                const medal = i === 0 ? '1.' : i === 1 ? '2.' : i === 2 ? '3.' : `${i + 1}.`;
-                text += `${medal} @${user.userId} - ${user.messages} msg\n`;
+                const medal = medals[i] || `${i + 1}.`;
+                text += `${medal} @${user.userId} - ${formatCoins(user.coins)} coins\n`;
                 mentions.push(`${user.userId}@s.whatsapp.net`);
             });
 
+            text += '\n💡 Gunakan .daily untuk claim reward harian!';
+
             await sock.sendMessage(chatId, { text, mentions }, { quoted: msg });
         } catch (err) {
-            await sock.sendMessage(chatId, { text: 'gagal memuat leaderboard' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: '❌ Gagal memuat leaderboard' }, { quoted: msg });
         }
     }
 };

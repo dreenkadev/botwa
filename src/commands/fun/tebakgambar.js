@@ -1,34 +1,64 @@
+// tebakgambar - Game tebak gambar (dengan data lengkap dari JSON)
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 const activeGames = new Map();
+
+// Load questions from JSON  
+let QUESTIONS = [];
+try {
+    const dataPath = path.join(__dirname, '../../data/tebakgambar.json');
+    QUESTIONS = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+} catch {
+    // Fallback data
+    QUESTIONS = [
+        { img: '', jawaban: 'KUCING', deskripsi: 'Hewan peliharaan yang mengeong' }
+    ];
+}
 
 module.exports = {
     name: 'tebakgambar',
     aliases: ['tg', 'guesspic'],
-    description: 'Guess the picture game',
+    description: 'Game tebak gambar (1000+ soal)',
 
     async execute(sock, msg, { chatId, args, senderId }) {
+        const action = args[0]?.toLowerCase();
+
+        // Stop game
+        if (action === 'stop' || action === 'nyerah') {
+            const game = activeGames.get(chatId);
+            if (game) {
+                activeGames.delete(chatId);
+                await sock.sendMessage(chatId, {
+                    text: `🏳️ *Menyerah!*\n\n✅ Jawaban: *${game.answer}*\n📝 ${game.description}`
+                }, { quoted: msg });
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: '❌ Tidak ada game yang berlangsung.'
+                }, { quoted: msg });
+            }
+            return;
+        }
+
         // Check if answering
-        if (args[0] && args[0].toLowerCase() !== 'start') {
+        if (action && action !== 'start') {
             const game = activeGames.get(chatId);
             if (game && game.active) {
-                const userAnswer = args.join(' ').toLowerCase().trim();
+                const userAnswer = args.join(' ').toUpperCase().trim();
 
-                if (userAnswer === game.answer.toLowerCase()) {
+                if (userAnswer === game.answer.toUpperCase()) {
                     const time = ((Date.now() - game.startTime) / 1000).toFixed(1);
                     activeGames.delete(chatId);
 
                     await sock.sendMessage(chatId, {
-                        text: `✅ *BENAR!*\n\n` +
-                            `🎯 Jawaban: ${game.answer}\n` +
-                            `⏱️ Waktu: ${time} detik\n` +
-                            `👤 Pemenang: @${senderId}\n\n` +
-                            `𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`,
+                        text: `✅ *BENAR!*\n\n🎯 Jawaban: *${game.answer}*\n📝 ${game.description}\n⏱️ Waktu: ${time} detik`,
                         mentions: [`${senderId}@s.whatsapp.net`]
                     }, { quoted: msg });
                 } else {
+                    const hint = getHint(game.answer);
                     await sock.sendMessage(chatId, {
-                        text: `❌ Salah! Coba lagi...\n\nHint: ${game.hint || 'Tidak ada hint'}\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
+                        text: `❌ Salah! Coba lagi...\n\n💡 Hint: ${hint}`
                     }, { quoted: msg });
                 }
                 return;
@@ -37,8 +67,10 @@ module.exports = {
 
         // Check if there's an active game
         if (activeGames.has(chatId)) {
+            const game = activeGames.get(chatId);
+            const hint = getHint(game.answer);
             await sock.sendMessage(chatId, {
-                text: '⚠️ Masih ada game aktif!\n\nJawab dengan: .tg <jawaban>\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                text: `⚠️ Masih ada game aktif!\n\n💡 Hint: ${hint}\n\nJawab dengan: .tg <jawaban>\nMenyerah: .tg nyerah`
             }, { quoted: msg });
             return;
         }
@@ -46,44 +78,45 @@ module.exports = {
         // Start new game
         try {
             // Get random question
-            const question = getRandomQuestion();
+            const question = QUESTIONS[Math.floor(Math.random() * QUESTIONS.length)];
 
             activeGames.set(chatId, {
                 active: true,
-                answer: question.answer,
-                hint: question.hint,
+                answer: question.jawaban,
+                description: question.deskripsi || '',
+                imageUrl: question.img,
                 startTime: Date.now()
             });
 
-            // Auto timeout after 60 seconds
+            // Auto timeout after 90 seconds
+            const startTime = Date.now();
             setTimeout(() => {
                 const game = activeGames.get(chatId);
-                if (game && game.startTime === question.startTime) {
+                if (game && game.startTime === startTime) {
                     activeGames.delete(chatId);
                     sock.sendMessage(chatId, {
-                        text: `⏰ *Waktu habis!*\n\nJawaban: ${question.answer}\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
+                        text: `⏰ *Waktu habis!*\n\n✅ Jawaban: *${question.jawaban}*\n📝 ${question.deskripsi || ''}`
                     }).catch(() => { });
                 }
-            }, 60000);
+            }, 90000);
 
             // Try to get image
             let imageBuffer = null;
-            if (question.image) {
+            if (question.img) {
                 try {
-                    const imgRes = await axios.get(question.image, {
+                    const imgRes = await axios.get(question.img, {
                         responseType: 'arraybuffer',
-                        timeout: 10000
+                        timeout: 15000,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0'
+                        }
                     });
                     imageBuffer = Buffer.from(imgRes.data);
                 } catch { }
             }
 
-            const caption = `🖼️ *TEBAK GAMBAR!*\n\n` +
-                `❓ Tebak gambar di atas!\n` +
-                `💡 Hint: ${question.hint}\n` +
-                `⏱️ Waktu: 60 detik\n\n` +
-                `Jawab dengan: .tg <jawaban>\n\n` +
-                `𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`;
+            const hint = getHint(question.jawaban);
+            const caption = `🖼️ *TEBAK GAMBAR!*\n\n❓ Tebak gambar di atas!\n💡 Hint: ${hint}\n⏱️ Waktu: 90 detik\n\nJawab dengan: .tg <jawaban>\nMenyerah: .tg nyerah`;
 
             if (imageBuffer) {
                 await sock.sendMessage(chatId, {
@@ -91,44 +124,24 @@ module.exports = {
                     caption: caption
                 }, { quoted: msg });
             } else {
+                // If image fails, send description instead
                 await sock.sendMessage(chatId, {
-                    text: `🖼️ *TEBAK GAMBAR!*\n\n` +
-                        `Deskripsi: ${question.description}\n\n` +
-                        `💡 Hint: ${question.hint}\n` +
-                        `⏱️ Waktu: 60 detik\n\n` +
-                        `Jawab dengan: .tg <jawaban>\n\n` +
-                        `𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
+                    text: `🖼️ *TEBAK GAMBAR!*\n\n📝 Deskripsi: ${question.deskripsi}\n\n💡 Hint: ${hint}\n⏱️ Waktu: 90 detik\n\nJawab dengan: .tg <jawaban>\nMenyerah: .tg nyerah`
                 }, { quoted: msg });
             }
 
         } catch (err) {
             await sock.sendMessage(chatId, {
-                text: '❌ Gagal memulai game. Coba lagi.\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                text: '❌ Gagal memulai game. Coba lagi.'
             }, { quoted: msg });
         }
     }
 };
 
-function getRandomQuestion() {
-    const questions = [
-        { answer: 'kucing', hint: 'Hewan berkaki 4, suka tidur', description: 'Hewan peliharaan yang mengeong' },
-        { answer: 'matahari', hint: 'Terbit dari timur', description: 'Benda langit yang menyinari bumi' },
-        { answer: 'sepeda', hint: 'Kendaraan roda dua tanpa mesin', description: 'Dikayuh untuk bergerak' },
-        { answer: 'komputer', hint: 'Alat elektronik untuk bekerja', description: 'Ada keyboard dan monitor' },
-        { answer: 'gitar', hint: 'Alat musik petik', description: 'Punya 6 senar' },
-        { answer: 'pizza', hint: 'Makanan dari Italia', description: 'Berbentuk bulat dengan topping' },
-        { answer: 'pesawat', hint: 'Kendaraan terbang', description: 'Punya sayap' },
-        { answer: 'buku', hint: 'Sumber ilmu pengetahuan', description: 'Kumpulan kertas yang dijilid' },
-        { answer: 'jam', hint: 'Menunjukkan waktu', description: 'Ada jarum pendek dan panjang' },
-        { answer: 'bulan', hint: 'Terlihat di malam hari', description: 'Satelit alami bumi' },
-        { answer: 'apel', hint: 'Buah merah atau hijau', description: 'Logo sebuah brand HP terkenal' },
-        { answer: 'kopi', hint: 'Minuman bikin melek', description: 'Warna hitam atau coklat' },
-        { answer: 'payung', hint: 'Dipakai saat hujan', description: 'Dipakai di atas kepala' },
-        { answer: 'handphone', hint: 'Alat komunikasi genggam', description: 'Smartphone' },
-        { answer: 'topi', hint: 'Dipakai di kepala', description: 'Pelindung dari matahari' }
-    ];
-
-    const q = questions[Math.floor(Math.random() * questions.length)];
-    q.startTime = Date.now();
-    return q;
+function getHint(answer) {
+    const words = answer.split(' ');
+    return words.map(word => {
+        if (word.length <= 2) return word;
+        return word[0] + '_'.repeat(word.length - 2) + word[word.length - 1];
+    }).join(' ') + ` (${answer.length} karakter)`;
 }

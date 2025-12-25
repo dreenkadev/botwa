@@ -1,8 +1,9 @@
 # 📖 DreenkaBot-WA Command Guide
-## Panduan Lengkap Penggunaan Semua Command
+## Panduan Lengkap Penggunaan Semua Command (146+ Commands)
 
 **Prefix:** `.` (titik)
 **Owner:** @Dreenka
+**Total Commands:** 146+
 
 ---
 
@@ -14,7 +15,7 @@
 4. [MODERATION](#-moderation) - Moderasi grup
 5. [MEDIA](#-media) - Download & edit media
 6. [UTILITY](#-utility) - Tools berguna
-7. [FUN](#-fun) - Hiburan & game
+7. [FUN & GAMES](#-fun--games) - Hiburan & game
 8. [AI](#-ai) - Kecerdasan buatan
 
 ---
@@ -24,7 +25,8 @@
 | Command | Deskripsi | Contoh |
 |---------|-----------|--------|
 | `.menu` / `.m` | Tampilkan daftar semua command | `.menu` |
-| `.help <cmd>` / `.mi` | Info detail tentang command | `.help ping` |
+| `.mi <cmd>` | Info singkat tentang command | `.mi tt` |
+| `.help <cmd>` | Bantuan penggunaan command | `.help ping` |
 | `.bot` / `.info` | Info tentang bot | `.bot` |
 | `.ping` | Cek response time bot | `.ping` |
 | `.owner` | Info owner bot | `.owner` |
@@ -101,8 +103,10 @@
 
 | Command | Deskripsi | Contoh |
 |---------|-----------|--------|
-| `.tt <url>` | Download TikTok | `.tt https://vm.tiktok.com/xxx` |
+| `.tt <url>` | Download TikTok (video) | `.tt https://vm.tiktok.com/xxx` |
 | `.tt <url> -a` | Download TikTok audio | `.tt https://vm.tiktok.com/xxx -a` |
+| `.tt <url> -hd` | Download TikTok HD | `.tt https://vm.tiktok.com/xxx -hd` |
+| `.ttsearch <keyword>` | Search video TikTok | `.ttsearch funny cat` |
 | `.ig <url>` | Download Instagram | `.ig https://instagram.com/p/xxx` |
 | `.ytmp4 <url>` | Download YouTube video | `.ytmp4 https://youtu.be/xxx` |
 | `.ytmp3 <url>` | Download YouTube audio | `.ytmp3 https://youtu.be/xxx` |
@@ -110,8 +114,11 @@
 | `.twitter <url>` | Download Twitter/X | `.twitter https://x.com/xxx` |
 | `.spotify <url>` | Download Spotify | `.spotify https://open.spotify.com/xxx` |
 | `.pinterest <query>` | Cari gambar Pinterest | `.pinterest anime aesthetic` |
+| `.pinalbum <query>` | Download multiple Pinterest | `.pinalbum wallpaper 4k` |
+| `.mediafire <url>` | Download dari MediaFire | `.mediafire https://mediafire.com/xxx` |
+| `.snackvideo <url>` | Download Snack Video | `.snackvideo https://s.snackvideo.com/xxx` |
 
-### Edit Media
+### Edit Media (Image)
 
 | Command | Deskripsi | Contoh |
 |---------|-----------|--------|
@@ -125,7 +132,17 @@
 | `.rotate <deg>` | Putar gambar | Reply + `.rotate 90` |
 | `.resize <w> <h>` | Resize gambar | Reply + `.resize 500 500` |
 | `.removebg` | Hapus background | Reply gambar + `.removebg` |
-| `.imagine <prompt>` | Generate gambar AI | `.imagine sunset beach` |
+
+### AI Image Processing ✨ NEW
+
+| Command | Deskripsi | Contoh |
+|---------|-----------|--------|
+| `.imagine <prompt>` | Generate gambar AI (12 styles) | `.imagine sunset beach --style anime` |
+| `.remini <mode>` | AI enhance (enhance/recolor/dehaze) | Reply foto + `.remini enhance` |
+| `.pxpic <tool>` | Image tools (5 tools) | Reply foto + `.pxpic upscale` |
+| `.ephoto <effect> <text>` | Text effect (17 templates) | `.ephoto neon Hello` |
+| `.banana <style>` | Transform style AI (img2img) | Reply foto + `.banana anime style` |
+| `.img2video` | Convert gambar ke AI video | Reply foto + `.img2video` |
 
 ### Audio Effect
 
@@ -135,6 +152,7 @@
 | `.slow` | Slow motion audio | Reply audio + `.slow` |
 | `.nightcore` | Efek nightcore | Reply audio + `.nightcore` |
 | `.mp3` | Convert video ke audio | Reply video + `.mp3` |
+| `.voicecover <model>` | AI voice cover | Reply audio + `.voicecover Miku` |
 
 ---
 
@@ -201,9 +219,22 @@
 
 ---
 
-## 🎮 FUN
+## 🎮 FUN & GAMES
 
-### Games
+### Games ✨ NEW (dengan database lengkap!)
+
+| Command | Deskripsi | Total Soal |
+|---------|-----------|------------|
+| `.family100` | Game Family 100 | 800+ soal |
+| `.tebakgambar` | Game tebak gambar dengan gambar | 1000+ soal |
+| `.tebakbendera` | Game tebak bendera negara | 86+ bendera |
+| `.tebakkata` | Game tebak kata dari definisi | 500+ kata |
+| `.tebakkimia` | Game tebak unsur kimia | 30+ unsur |
+| `.susunkata` | Game susun kata acak | 500+ kata |
+| `.asahotak` | Game teka-teki asah otak | 600+ teka-teki |
+| `.growagarden` | Info game GAG (Roblox) | Live API |
+
+### Mini Games
 
 | Command | Deskripsi | Contoh |
 |---------|-----------|--------|
@@ -212,7 +243,6 @@
 | `.8ball <question>` | Magic 8 ball | `.8ball Apakah aku ganteng?` |
 | `.suit <pilihan>` | Suit (batu kertas gunting) | `.suit batu` |
 | `.math` | Quiz matematika | `.math` |
-| `.tebakgambar` | Game tebak gambar | `.tebakgambar` |
 | `.fishing` | Mancing virtual | `.fishing` |
 
 ### Economy
@@ -259,6 +289,12 @@
 |---------|-----------|--------|
 | `.ai <prompt>` | Chat dengan AI | `.ai Apa itu coding?` |
 | `.code <lang> <desc>` | Generate code | `.code python hello world` |
+| `.aivideo <prompt>` | Generate video AI (Veo3 style) | `.aivideo A cat playing piano` |
+| `.elevenlabs <voice> <text>` | ElevenLabs TTS | `.elevenlabs bella Hello world` |
+| `.shion <msg>` | Chat dengan Shion AI (roleplay) | `.shion Hai Shion!` |
+| `.songgenerator <prompt>` | Generate musik dengan AI | `.songgenerator happy pop song` |
+| `.voicecover <model>` | AI voice cover | Reply audio + `.voicecover Miku` |
+| `.banana <style>` | Transform style gambar AI | Reply foto + `.banana anime style` |
 
 ---
 
@@ -268,18 +304,34 @@
    - `.sticker` (reply gambar)
    - `.translate` (reply teks)
    - `.tts` (reply teks)
+   - `.remini` (reply foto)
+   - `.voicecover` (reply audio)
 
 2. **Media Download** - Untuk download, paste langsung URL:
-   - `.tt <url>` - TikTok
+   - `.tt <url>` - TikTok (support HD & slideshow)
    - `.ig <url>` - Instagram
    - `.ytmp4 <url>` - YouTube
 
-3. **Grup Commands** - Harus digunakan di dalam grup:
+3. **TikTok Flags**:
+   - `.tt <url> -a` - Download audio only
+   - `.tt <url> -hd` - Download HD quality
+
+4. **Grup Commands** - Harus digunakan di dalam grup:
    - `.tagall`, `.kick`, `.promote`, dll
 
-4. **Audio Flag** - Tambah `-a` untuk download audio only:
-   - `.tt <url> -a`
-   - `.ig <url> -a`
+5. **Game Commands**:
+   - Ketik `.f100` untuk Family 100
+   - Ketik `.tg` untuk Tebak Gambar
+   - Ketik `.bendera` untuk Tebak Bendera
+
+---
+
+## 📊 STATISTIK BOT
+
+- **Total Commands:** 146+
+- **Game Data:** 3000+ soal
+- **AI Models:** 6 (GPT, Veo3, ElevenLabs, dll)
+- **Downloader:** 8 platform
 
 ---
 

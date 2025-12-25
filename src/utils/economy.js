@@ -1,21 +1,59 @@
 /**
  * Economy System - Virtual currency for bot users
+ * Now with PERSISTENT storage to file
  */
 
-const economy = new Map();
+const fs = require('fs');
+const path = require('path');
+
+const economyPath = path.join(__dirname, '..', '..', 'database', 'economy.json');
+
+let economy = {};
+
+// Load economy data from file
+function loadEconomy() {
+    try {
+        if (fs.existsSync(economyPath)) {
+            const data = fs.readFileSync(economyPath, 'utf8');
+            economy = JSON.parse(data);
+        }
+    } catch (err) {
+        console.error('Economy load error:', err.message);
+        economy = {};
+    }
+}
+
+// Save economy data to file (debounced)
+let saveTimeout = null;
+function saveEconomy() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        try {
+            // Ensure directory exists
+            const dir = path.dirname(economyPath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            fs.writeFileSync(economyPath, JSON.stringify(economy, null, 2));
+        } catch (err) {
+            console.error('Economy save error:', err.message);
+        }
+    }, 1000); // Debounce 1 second to avoid too many writes
+}
 
 /**
  * Get user balance
  */
 function getBalance(userId) {
-    if (!economy.has(userId)) {
-        economy.set(userId, {
+    if (!economy[userId]) {
+        economy[userId] = {
             coins: 0,
             lastDaily: 0,
             totalEarned: 0
-        });
+        };
+        saveEconomy();
     }
-    return economy.get(userId);
+    return economy[userId];
 }
 
 /**
@@ -25,6 +63,7 @@ function addCoins(userId, amount) {
     const user = getBalance(userId);
     user.coins += amount;
     user.totalEarned += amount;
+    saveEconomy();
     return user.coins;
 }
 
@@ -35,6 +74,7 @@ function removeCoins(userId, amount) {
     const user = getBalance(userId);
     if (user.coins < amount) return false;
     user.coins -= amount;
+    saveEconomy();
     return true;
 }
 
@@ -68,11 +108,25 @@ function claimDaily(userId) {
 }
 
 /**
+ * Get leaderboard (top users)
+ */
+function getLeaderboard(limit = 10) {
+    return Object.entries(economy)
+        .map(([id, data]) => ({ userId: id, ...data }))
+        .filter(u => u.coins > 0)
+        .sort((a, b) => b.coins - a.coins)
+        .slice(0, limit);
+}
+
+/**
  * Format coins with thousand separator
  */
 function formatCoins(amount) {
     return amount.toLocaleString('id-ID');
 }
+
+// Initialize on module load
+loadEconomy();
 
 module.exports = {
     getBalance,
@@ -80,5 +134,8 @@ module.exports = {
     removeCoins,
     transferCoins,
     claimDaily,
-    formatCoins
+    formatCoins,
+    getLeaderboard,
+    loadEconomy,
+    saveEconomy
 };
