@@ -20,34 +20,55 @@ module.exports = {
             // Check if quoted message is viewonce
             let mediaType = null;
             let isViewOnce = false;
+            let originalCaption = '';
 
             // Check all viewonce formats
             if (quotedMsg.viewOnceMessage?.message) {
                 isViewOnce = true;
-                if (quotedMsg.viewOnceMessage.message.imageMessage) mediaType = 'image';
-                if (quotedMsg.viewOnceMessage.message.videoMessage) mediaType = 'video';
+                if (quotedMsg.viewOnceMessage.message.imageMessage) {
+                    mediaType = 'image';
+                    originalCaption = quotedMsg.viewOnceMessage.message.imageMessage.caption || '';
+                }
+                if (quotedMsg.viewOnceMessage.message.videoMessage) {
+                    mediaType = 'video';
+                    originalCaption = quotedMsg.viewOnceMessage.message.videoMessage.caption || '';
+                }
             }
-
+            
             if (quotedMsg.viewOnceMessageV2?.message) {
                 isViewOnce = true;
-                if (quotedMsg.viewOnceMessageV2.message.imageMessage) mediaType = 'image';
-                if (quotedMsg.viewOnceMessageV2.message.videoMessage) mediaType = 'video';
+                if (quotedMsg.viewOnceMessageV2.message.imageMessage) {
+                    mediaType = 'image';
+                    originalCaption = quotedMsg.viewOnceMessageV2.message.imageMessage.caption || '';
+                }
+                if (quotedMsg.viewOnceMessageV2.message.videoMessage) {
+                    mediaType = 'video';
+                    originalCaption = quotedMsg.viewOnceMessageV2.message.videoMessage.caption || '';
+                }
             }
-
+            
             if (quotedMsg.viewOnceMessageV2Extension?.message) {
                 isViewOnce = true;
-                if (quotedMsg.viewOnceMessageV2Extension.message.imageMessage) mediaType = 'image';
-                if (quotedMsg.viewOnceMessageV2Extension.message.videoMessage) mediaType = 'video';
+                if (quotedMsg.viewOnceMessageV2Extension.message.imageMessage) {
+                    mediaType = 'image';
+                    originalCaption = quotedMsg.viewOnceMessageV2Extension.message.imageMessage.caption || '';
+                }
+                if (quotedMsg.viewOnceMessageV2Extension.message.videoMessage) {
+                    mediaType = 'video';
+                    originalCaption = quotedMsg.viewOnceMessageV2Extension.message.videoMessage.caption || '';
+                }
             }
 
             // Check viewOnce flag on regular media
             if (quotedMsg.imageMessage?.viewOnce) {
                 isViewOnce = true;
                 mediaType = 'image';
+                originalCaption = quotedMsg.imageMessage.caption || '';
             }
             if (quotedMsg.videoMessage?.viewOnce) {
                 isViewOnce = true;
                 mediaType = 'video';
+                originalCaption = quotedMsg.videoMessage.caption || '';
             }
 
             if (!isViewOnce || !mediaType) {
@@ -100,16 +121,22 @@ module.exports = {
                 return;
             }
 
+            // Build caption with original caption if exists
+            let caption = `viewonce revealed`;
+            if (originalCaption) {
+                caption += `\n\ncaption asli:\n${originalCaption}`;
+            }
+
             // Send the media back
             if (mediaType === 'image') {
                 await sock.sendMessage(chatId, {
                     image: buffer,
-                    caption: `viewonce revealed (${buffer.length} bytes)`
+                    caption
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
                     video: buffer,
-                    caption: `viewonce revealed (${buffer.length} bytes)`
+                    caption
                 }, { quoted: msg });
             }
 
