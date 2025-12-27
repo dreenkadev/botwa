@@ -52,7 +52,7 @@ module.exports = {
 
         } catch {
             await sock.sendMessage(chatId, {
-                text: '❌ Gagal menghitung ongkir\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                text: 'Gagal menghitung ongkir\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
             }, { quoted: msg });
         }
     }

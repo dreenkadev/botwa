@@ -176,13 +176,13 @@ module.exports = {
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Gagal generate gambar. Coba lagi nanti.'
+                    text: 'Gagal generate gambar. Coba lagi nanti.'
                 }, { quoted: msg });
             }
         } catch (err) {
             await reactDone(sock, msg);
             await sock.sendMessage(chatId, {
-                text: '❌ Error: ' + err.message
+                text: 'Error: ' + err.message
             }, { quoted: msg });
         }
     }

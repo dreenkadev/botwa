@@ -12,7 +12,7 @@ module.exports = {
             const prices = getPriceList();
             const payment = getPaymentInfo();
 
-            let text = `💰 HARGA SEWA BOT\n\n`;
+            let text = `HARGA SEWA BOT\n\n`;
 
             prices.forEach(p => {
                 text += `📦 ${p.label}\n`;

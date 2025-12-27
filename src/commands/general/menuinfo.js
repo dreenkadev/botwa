@@ -212,7 +212,7 @@ module.exports = {
 
             if (!info) {
                 await sock.sendMessage(chatId, {
-                    text: `❌ Command "${cmd}" tidak ditemukan\n\nKetik .menu untuk list command`
+                    text: `Command "${cmd}" tidak ditemukan\n\nKetik .menu untuk list command`
                 }, { quoted: msg });
                 return;
             }
@@ -222,7 +222,7 @@ module.exports = {
             }, { quoted: msg });
         } catch (err) {
             await sock.sendMessage(chatId, {
-                text: '❌ Gagal memuat info command'
+                text: 'Gagal memuat info command'
             }, { quoted: msg });
         }
     }

@@ -38,7 +38,7 @@ module.exports = {
 
             if (!rate) {
                 await sock.sendMessage(chatId, {
-                    text: `❌ Mata uang ${toCurrency} tidak ditemukan!\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
+                    text: `Mata uang ${toCurrency} tidak ditemukan!\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
                 }, { quoted: msg });
                 return;
             }
@@ -62,8 +62,8 @@ module.exports = {
 
             const text = `💱 *Currency Exchange*\n\n` +
                 `💵 ${formattedAmount} ${fromCurrency} = ${formattedResult} ${toCurrency}\n\n` +
-                `📊 *Kurs ${fromCurrency} Hari Ini:*\n${ratesText}\n` +
-                `⏰ Updated: ${new Date().toLocaleString('id-ID')}\n\n` +
+                `*Kurs ${fromCurrency} Hari Ini:*\n${ratesText}\n` +
+                `Updated: ${new Date().toLocaleString('id-ID')}\n\n` +
                 `𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`;
 
             await sock.sendMessage(chatId, { text }, { quoted: msg });
@@ -71,11 +71,11 @@ module.exports = {
         } catch (err) {
             if (err.response?.status === 404) {
                 await sock.sendMessage(chatId, {
-                    text: `❌ Mata uang ${from} tidak valid!\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
+                    text: `Mata uang ${from} tidak valid!\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Gagal mengambil data kurs. Coba lagi.\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                    text: 'Gagal mengambil data kurs. Coba lagi.\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
                 }, { quoted: msg });
             }
         }

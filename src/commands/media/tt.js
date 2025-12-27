@@ -1,15 +1,14 @@
-// tiktok downloader - enhanced dengan HD, slideshow support, dan rich metadata
+// tiktok downloader - fixed with working APIs
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const { getMetadataCache, setMetadataCache } = require('../../utils/cache');
 const { reactProcessing, reactDone } = require('../../utils/reaction');
 
 module.exports = {
     name: 'tt',
     aliases: ['tiktok', 'tta'],
-    description: 'download video/audio TikTok dengan HD & rich metadata',
+    description: 'download video/audio tiktok',
 
     async execute(sock, msg, { chatId, args }) {
         try {
@@ -19,51 +18,42 @@ module.exports = {
 
             if (!url || url.startsWith('-')) {
                 await sock.sendMessage(chatId, {
-                    text: '*📹 TIKTOK DOWNLOADER*\n\n' +
-                        '.tt <url> - Download video\n' +
-                        '.tt <url> -a - Download audio\n' +
-                        '.tt <url> -hd - Download HD video\n\n' +
-                        '*Example:*\n.tt https://vm.tiktok.com/xxx'
+                    text: 'tiktok downloader\n\n.tt <url> - download video\n.tt <url> -a - download audio\n.tt <url> -hd - download hd video\n\ncontoh:\n.tt https://vm.tiktok.com/xxx'
                 }, { quoted: msg });
                 return;
             }
 
             if (!url.includes('tiktok.com') && !url.includes('vm.tiktok')) {
-                await sock.sendMessage(chatId, { text: '❌ URL TikTok tidak valid' }, { quoted: msg });
+                await sock.sendMessage(chatId, { text: 'url tiktok tidak valid' }, { quoted: msg });
                 return;
             }
 
             await reactProcessing(sock, msg);
 
-            // Try enhanced API first (more reliable & rich metadata)
-            let result = await downloadTikTokEnhanced(url, isAudio, isHD);
+            let result = null;
 
-            // If API fails, try yt-dlp fallback
-            if (!result.success) {
-                const info = await getMediaInfo(url);
-                const mediaPath = await downloadMedia(url, isAudio ? 'audio' : 'video', 'tt');
-                if (mediaPath) {
-                    result = {
-                        success: true,
-                        type: 'video',
-                        buffer: fs.readFileSync(mediaPath),
-                        caption: info.success ? `@${info.username}\n${(info.description || '').substring(0, 100)}` : '',
-                        isAudio
-                    };
-                    try { fs.unlinkSync(mediaPath); } catch { }
-                }
+            // API 1: TikWM (primary)
+            result = await downloadFromTikWM(url, isAudio, isHD);
+
+            // API 2: Tiklydown (fallback)
+            if (!result?.success) {
+                result = await downloadFromTiklydown(url, isAudio, isHD);
+            }
+
+            // API 3: yt-dlp fallback
+            if (!result?.success) {
+                result = await downloadWithYtdlp(url, isAudio);
             }
 
             await reactDone(sock, msg);
 
-            if (!result.success) {
-                await sock.sendMessage(chatId, { text: '❌ Download gagal. Coba lagi.' }, { quoted: msg });
+            if (!result?.success) {
+                await sock.sendMessage(chatId, { text: 'download gagal. coba lagi nanti.' }, { quoted: msg });
                 return;
             }
 
-            // Handle slideshow (multiple images)
+            // Send slideshow
             if (result.type === 'slideshow' && result.images) {
-                // Send first few images
                 for (let i = 0; i < Math.min(result.images.length, 5); i++) {
                     try {
                         const imgRes = await axios.get(result.images[i], {
@@ -76,22 +66,7 @@ module.exports = {
                         }, { quoted: msg });
                     } catch { }
                 }
-
-                // Also send audio if available
-                if (result.musicUrl) {
-                    try {
-                        const audioRes = await axios.get(result.musicUrl, {
-                            responseType: 'arraybuffer',
-                            timeout: 15000
-                        });
-                        await sock.sendMessage(chatId, {
-                            audio: Buffer.from(audioRes.data),
-                            mimetype: 'audio/mpeg',
-                            ptt: false
-                        }, { quoted: msg });
-                    } catch { }
-                }
-            } else if (result.isAudio || isAudio) {
+            } else if (result.isAudio) {
                 await sock.sendMessage(chatId, {
                     audio: result.buffer,
                     mimetype: 'audio/mpeg',
@@ -106,54 +81,41 @@ module.exports = {
             }
         } catch (err) {
             await reactDone(sock, msg);
-            await sock.sendMessage(chatId, { text: '❌ Error: ' + err.message }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: 'error: ' + err.message }, { quoted: msg });
         }
     }
 };
 
-// Enhanced TikWM API with rich metadata
-async function downloadTikTokEnhanced(url, isAudio, isHD) {
+// API 1: TikWM
+async function downloadFromTikWM(url, isAudio, isHD) {
     try {
-        const response = await axios.post('https://www.tikwm.com/api/', {}, {
-            headers: {
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Origin': 'https://www.tikwm.com',
-                'Referer': 'https://www.tikwm.com/',
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/116.0.0.0 Mobile Safari/537.36'
-            },
-            params: {
-                url: url,
-                count: 12,
-                cursor: 0,
-                web: 1,
-                hd: 1
-            },
-            timeout: 20000
+        const response = await axios.get('https://www.tikwm.com/api/', {
+            params: { url, hd: 1 },
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            timeout: 15000
         });
 
-        const res = response.data?.data;
-        if (!res) return { success: false };
+        const data = response.data?.data;
+        if (!data) return { success: false };
 
-        // Check if it's a slideshow (images)
-        if (res.duration === 0 && res.images?.length > 0) {
+        // Slideshow
+        if (data.images?.length > 0) {
             return {
                 success: true,
                 type: 'slideshow',
-                images: res.images,
-                musicUrl: res.music ? 'https://www.tikwm.com' + res.music : null,
-                caption: formatCaption(res)
+                images: data.images,
+                caption: `@${data.author?.unique_id || ''}\n${(data.title || '').substring(0, 100)}`
             };
         }
 
-        // Video download
+        // Get media URL
         let mediaUrl;
-        if (isAudio) {
-            mediaUrl = res.music ? 'https://www.tikwm.com' + res.music : res.music_info?.play;
-        } else if (isHD && res.hdplay) {
-            mediaUrl = 'https://www.tikwm.com' + res.hdplay;
+        if (isAudio && data.music) {
+            mediaUrl = data.music;
+        } else if (isHD && data.hdplay) {
+            mediaUrl = data.hdplay;
         } else {
-            mediaUrl = res.play ? 'https://www.tikwm.com' + res.play : res.wmplay;
+            mediaUrl = data.play || data.wmplay;
         }
 
         if (!mediaUrl) return { success: false };
@@ -168,79 +130,89 @@ async function downloadTikTokEnhanced(url, isAudio, isHD) {
             success: true,
             type: 'video',
             buffer: Buffer.from(mediaRes.data),
-            caption: formatCaption(res),
+            caption: `@${data.author?.unique_id || ''}\n${(data.title || '').substring(0, 100)}`,
             isAudio
         };
     } catch (err) {
-        console.log('TikTok API error:', err.message);
+        console.log('TikWM error:', err.message);
         return { success: false };
     }
 }
 
-function formatCaption(res) {
-    const formatNum = (n) => {
-        if (!n) return '0';
-        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-        if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-        return n.toString();
-    };
+// API 2: Tiklydown
+async function downloadFromTiklydown(url, isAudio, isHD) {
+    try {
+        const response = await axios.get(`https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(url)}`, {
+            timeout: 15000
+        });
 
-    let caption = `*📹 TikTok*\n\n`;
-    caption += `👤 @${res.author?.unique_id || 'unknown'}\n`;
-    caption += `📝 ${(res.title || 'No caption').substring(0, 150)}\n\n`;
-    caption += `❤️ ${formatNum(res.digg_count)} | `;
-    caption += `💬 ${formatNum(res.comment_count)} | `;
-    caption += `👁️ ${formatNum(res.play_count)}\n`;
+        const data = response.data;
+        if (!data?.video) return { success: false };
 
-    if (res.music_info?.title) {
-        caption += `🎵 ${res.music_info.title}`;
+        let mediaUrl;
+        if (isAudio && data.music?.play_url) {
+            mediaUrl = data.music.play_url;
+        } else if (isHD && data.video?.noWatermark) {
+            mediaUrl = data.video.noWatermark;
+        } else {
+            mediaUrl = data.video.noWatermark || data.video.watermark;
+        }
+
+        if (!mediaUrl) return { success: false };
+
+        const mediaRes = await axios.get(mediaUrl, {
+            responseType: 'arraybuffer',
+            timeout: 60000
+        });
+
+        return {
+            success: true,
+            type: 'video',
+            buffer: Buffer.from(mediaRes.data),
+            caption: `@${data.author?.nickname || ''}\n${(data.title || '').substring(0, 100)}`,
+            isAudio
+        };
+    } catch (err) {
+        console.log('Tiklydown error:', err.message);
+        return { success: false };
     }
-
-    return caption;
 }
 
-// yt-dlp fallback
-function getMediaInfo(url) {
-    return new Promise(resolve => {
-        try {
-            const cached = getMetadataCache(url);
-            if (cached) { resolve(cached); return; }
+// API 3: yt-dlp fallback
+async function downloadWithYtdlp(url, isAudio) {
+    return new Promise((resolve) => {
+        const outputPath = path.join('/tmp', `tt_${Date.now()}.${isAudio ? 'mp3' : 'mp4'}`);
+        const args = isAudio
+            ? ['-f', 'bestaudio', '-x', '--audio-format', 'mp3', '-o', outputPath, url]
+            : ['-f', 'best[ext=mp4]', '-o', outputPath, url];
 
-            const proc = spawn('yt-dlp', ['-j', '--no-warnings', '--no-playlist', url]);
-            let output = '';
+        const proc = spawn('yt-dlp', args);
 
-            proc.stdout.on('data', d => output += d);
-            proc.on('close', code => {
-                if (code !== 0) { resolve({ success: false }); return; }
-                try {
-                    const info = JSON.parse(output);
-                    const result = { success: true, username: info.uploader || 'unknown', description: info.description || '' };
-                    setMetadataCache(url, result);
-                    resolve(result);
-                } catch { resolve({ success: false }); }
-            });
-            proc.on('error', () => resolve({ success: false }));
-        } catch { resolve({ success: false }); }
-    });
-}
+        let timeout = setTimeout(() => {
+            proc.kill();
+            resolve({ success: false });
+        }, 120000);
 
-function downloadMedia(url, type, prefix) {
-    return new Promise(resolve => {
-        try {
-            const filename = `${prefix}_${Date.now()}`;
-            const outputPath = path.join('/tmp', `${filename}.%(ext)s`);
-            const args = type === 'audio'
-                ? ['-x', '--audio-format', 'mp3', '-o', outputPath, '--no-warnings', '--no-playlist', url]
-                : ['-f', 'best[ext=mp4]/best', '-o', outputPath, '--no-warnings', '--no-playlist', url];
+        proc.on('close', (code) => {
+            clearTimeout(timeout);
+            if (code === 0 && fs.existsSync(outputPath)) {
+                const buffer = fs.readFileSync(outputPath);
+                try { fs.unlinkSync(outputPath); } catch { }
+                resolve({
+                    success: true,
+                    type: 'video',
+                    buffer,
+                    caption: '',
+                    isAudio
+                });
+            } else {
+                resolve({ success: false });
+            }
+        });
 
-            const proc = spawn('yt-dlp', args);
-            proc.on('close', code => {
-                if (code !== 0) { resolve(null); return; }
-                const files = fs.readdirSync('/tmp');
-                const file = files.find(f => f.startsWith(filename));
-                resolve(file ? path.join('/tmp', file) : null);
-            });
-            proc.on('error', () => resolve(null));
-        } catch { resolve(null); }
+        proc.on('error', () => {
+            clearTimeout(timeout);
+            resolve({ success: false });
+        });
     });
 }

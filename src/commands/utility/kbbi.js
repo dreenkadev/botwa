@@ -63,7 +63,7 @@ module.exports = {
 
         } catch {
             await sock.sendMessage(chatId, {
-                text: `❌ Kata "${word}" tidak ditemukan di KBBI\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
+                text: `Kata "${word}" tidak ditemukan di KBBI\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
             }, { quoted: msg });
         }
     }

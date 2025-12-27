@@ -25,9 +25,9 @@ module.exports = {
             let text = `📅 *Scheduled Messages* (${schedules.length})\n\n`;
             schedules.forEach(s => {
                 const time = new Date(s.executeAt).toLocaleString('id-ID');
-                text += `🆔 ${s.id}\n`;
-                text += `⏰ ${time}\n`;
-                text += `📝 ${s.message.substring(0, 50)}...\n\n`;
+                text += `${s.id}\n`;
+                text += `${time}\n`;
+                text += `${s.message.substring(0, 50)}...\n\n`;
             });
             text += '𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃';
 
@@ -39,7 +39,7 @@ module.exports = {
             const schedId = args[1];
             if (!schedId) {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Masukkan ID schedule!\n\n.schedule del <id>\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                    text: 'Masukkan ID schedule!\n\n.schedule del <id>\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
                 }, { quoted: msg });
                 return;
             }
@@ -51,7 +51,7 @@ module.exports = {
             }
 
             await sock.sendMessage(chatId, {
-                text: removed ? '✅ Schedule dihapus!\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃' : '❌ Schedule tidak ditemukan.\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                text: removed ? 'Schedule dihapus!\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃' : 'Schedule tidak ditemukan.\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
             }, { quoted: msg });
             return;
         }
@@ -79,14 +79,14 @@ module.exports = {
 
         if (ms < 60000) {
             await sock.sendMessage(chatId, {
-                text: '❌ Minimum waktu: 1 menit\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                text: 'Minimum waktu: 1 menit\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
             }, { quoted: msg });
             return;
         }
 
         if (ms > 86400000 * 7) {
             await sock.sendMessage(chatId, {
-                text: '❌ Maximum waktu: 7 hari\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                text: 'Maximum waktu: 7 hari\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
             }, { quoted: msg });
             return;
         }
@@ -109,7 +109,7 @@ module.exports = {
 
         const execTime = new Date(executeAt).toLocaleString('id-ID');
         await sock.sendMessage(chatId, {
-            text: `✅ *Message Scheduled!*\n\n🆔 ${schedId}\n⏰ Akan dikirim: ${execTime}\n📝 ${message}\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
+            text: `*Message Scheduled!*\n\n${schedId}\nAkan dikirim: ${execTime}\n${message}\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃`
         }, { quoted: msg });
     }
 };

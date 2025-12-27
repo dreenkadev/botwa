@@ -31,7 +31,7 @@ module.exports = {
             const surahData = surahResponse.data?.data;
             if (!surahData) {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Surah tidak ditemukan!\n\nGunakan: .ayat <surah> <ayat>\nContoh: .ayat 1 1\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                    text: 'Surah tidak ditemukan!\n\nGunakan: .ayat <surah> <ayat>\nContoh: .ayat 1 1\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
                 }, { quoted: msg });
                 return;
             }
@@ -66,7 +66,7 @@ module.exports = {
 
         } catch (err) {
             await sock.sendMessage(chatId, {
-                text: '❌ Gagal mengambil ayat. Coba lagi.\n\nGunakan: .ayat <surah> <ayat>\nContoh: .ayat 1 1 (Al-Fatihah ayat 1)\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
+                text: 'Gagal mengambil ayat. Coba lagi.\n\nGunakan: .ayat <surah> <ayat>\nContoh: .ayat 1 1 (Al-Fatihah ayat 1)\n\n𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃'
             }, { quoted: msg });
         }
     }
