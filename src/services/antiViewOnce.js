@@ -45,38 +45,55 @@ async function handleViewOnce(sock, msg, ownerNumber) {
         // Check if enabled for this chat
         if (!isEnabled(chatId)) return false;
 
-        // Check for viewOnce message
-        const viewOnce = msg.message?.viewOnceMessage ||
-            msg.message?.viewOnceMessageV2 ||
-            msg.message?.viewOnceMessageV2Extension;
+        // Check for viewOnce message types
+        const m = msg.message;
+        if (!m) return false;
 
-        if (!viewOnce) return false;
-
-        const innerMessage = viewOnce.message;
-        if (!innerMessage) return false;
-
-        // Determine media type
+        let viewOnceContent = null;
         let mediaType = null;
-        let mediaKey = null;
 
-        if (innerMessage.imageMessage) {
+        // Check different viewOnce formats
+        if (m.viewOnceMessage?.message?.imageMessage) {
+            viewOnceContent = m.viewOnceMessage.message.imageMessage;
             mediaType = 'image';
-            mediaKey = 'imageMessage';
-        } else if (innerMessage.videoMessage) {
+        } else if (m.viewOnceMessage?.message?.videoMessage) {
+            viewOnceContent = m.viewOnceMessage.message.videoMessage;
             mediaType = 'video';
-            mediaKey = 'videoMessage';
-        } else {
+        } else if (m.viewOnceMessageV2?.message?.imageMessage) {
+            viewOnceContent = m.viewOnceMessageV2.message.imageMessage;
+            mediaType = 'image';
+        } else if (m.viewOnceMessageV2?.message?.videoMessage) {
+            viewOnceContent = m.viewOnceMessageV2.message.videoMessage;
+            mediaType = 'video';
+        } else if (m.viewOnceMessageV2Extension?.message?.imageMessage) {
+            viewOnceContent = m.viewOnceMessageV2Extension.message.imageMessage;
+            mediaType = 'image';
+        } else if (m.viewOnceMessageV2Extension?.message?.videoMessage) {
+            viewOnceContent = m.viewOnceMessageV2Extension.message.videoMessage;
+            mediaType = 'video';
+        }
+
+        if (!viewOnceContent || !mediaType) return false;
+
+        console.log(`[ViewOnce] Detected ${mediaType} viewonce, downloading...`);
+
+        // Download media - use the original message structure
+        const buffer = await downloadMediaMessage(
+            msg,
+            'buffer',
+            {},
+            {
+                logger: console,
+                reuploadRequest: sock.updateMediaMessage
+            }
+        );
+
+        if (!buffer || buffer.length === 0) {
+            console.log('[ViewOnce] Download failed - empty buffer');
             return false;
         }
 
-        // Download media
-        const buffer = await downloadMediaMessage(
-            { message: innerMessage, key: msg.key },
-            'buffer',
-            {}
-        );
-
-        if (!buffer) return false;
+        console.log(`[ViewOnce] Downloaded ${buffer.length} bytes`);
 
         // Save to folder
         if (!fs.existsSync(savePath)) {
@@ -96,19 +113,21 @@ async function handleViewOnce(sock, msg, ownerNumber) {
         // Forward to owner
         const caption = `viewonce saved\n\nfrom: ${senderNum}\n${isGroup ? 'group: ' + chatId.split('@')[0] : 'private'}\ntime: ${new Date().toLocaleString()}`;
 
+        const ownerJid = ownerNumber + '@s.whatsapp.net';
+
         if (mediaType === 'image') {
-            await sock.sendMessage(ownerNumber + '@s.whatsapp.net', {
+            await sock.sendMessage(ownerJid, {
                 image: buffer,
                 caption
             });
         } else {
-            await sock.sendMessage(ownerNumber + '@s.whatsapp.net', {
+            await sock.sendMessage(ownerJid, {
                 video: buffer,
                 caption
             });
         }
 
-        console.log(`[ViewOnce] Saved from ${senderNum}`);
+        console.log(`[ViewOnce] Saved and forwarded from ${senderNum}`);
         return true;
 
     } catch (err) {
