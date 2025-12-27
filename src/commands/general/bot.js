@@ -20,7 +20,7 @@ prefix: ${config.prefix || '.< command >'}
 mode: ${getMode() || 'private'}
 status: online
 
-sosmed owner:
+social media:
 - ig: instagram.com/dreevx_/
 - github: github.com/dreenkadev
 - portofolio: dreenka.vercel.app/

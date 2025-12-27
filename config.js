@@ -2,7 +2,7 @@ module.exports = {
     prefix: '.',
     ownerNumber: '6285768943436',
     ownerLid: '24932570402997', // WhatsApp Linked ID
-    ownerName: 'Dreenka',
+    ownerName: 'DreenkaDev',
     botName: 'DreenkaBot-WA',
     botDescription: 'WhatsApp Bot',
     signature: '𝗗𝗿𝗲𝗲𝗻𝗸𝗮𝗗𝗲𝘃',

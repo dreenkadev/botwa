@@ -5,24 +5,24 @@ const config = require('../../../config');
 module.exports = {
     name: 'sewa',
     aliases: ['rent', 'price', 'harga'],
-    description: 'lihat harga sewa bot',
+    description: 'pricelist bot',
 
     async execute(sock, msg, { chatId }) {
         try {
             const prices = getPriceList();
             const payment = getPaymentInfo();
 
-            let text = `HARGA SEWA BOT\n\n`;
+            let text = `PriceList:\n\n`;
 
             prices.forEach(p => {
-                text += `📦 ${p.label}\n`;
+                text += ` ${p.label}\n`;
                 text += `   Rp ${p.price.toLocaleString('id-ID')}\n\n`;
             });
 
             text += `━━━━━━━━━━━━━━━\n`;
-            text += `💳 PEMBAYARAN\n\n`;
+            text += `Payment:\n\n`;
 
-            text += `🏦 Bank ${payment.bank}\n`;
+            text += `Bank ${payment.bank}\n`;
             text += `   ${payment.accountNumber}\n`;
             text += `   a.n ${payment.accountName}\n\n`;
 
@@ -32,7 +32,7 @@ module.exports = {
             if (payment.ewallet.ovo) text += `   OVO: ${payment.ewallet.ovo}\n`;
 
             text += `\n━━━━━━━━━━━━━━━\n`;
-            text += `📞 hubungi owner:\n`;
+            text += `owner:\n`;
             text += `   wa.me/${config.ownerNumber}\n\n`;
             text += `kirim bukti transfer ke owner untuk aktivasi.`;
 

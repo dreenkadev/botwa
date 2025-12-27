@@ -10,21 +10,21 @@ let rentalData = {
     settings: {
         ownerPhone: config.ownerNumber || '',
         paymentInfo: {
-            bank: 'BCA',
-            accountNumber: '1234567890',
+            bank: '---',
+            accountNumber: '---',
             accountName: 'DreenkaDev',
             ewallet: {
-                dana: '081234567890',
-                gopay: '081234567890',
-                ovo: '081234567890'
+                dana: '085768943436',
+                gopay: '085768943436',
+                ovo: '085768943436'
             }
         },
         priceList: [
-            { days: 7, price: 15000, label: '1 Minggu' },
-            { days: 30, price: 50000, label: '1 Bulan' },
-            { days: 90, price: 120000, label: '3 Bulan' },
-            { days: 180, price: 200000, label: '6 Bulan' },
-            { days: 365, price: 350000, label: '1 Tahun' }
+            { days: 7, price: 5000, label: '1 Minggu' },
+            { days: 30, price: 20000, label: '1 Bulan' },
+            { days: 90, price: 50000, label: '3 Bulan' },
+            { days: 180, price: 80000, label: '6 Bulan' },
+            { days: 365, price: 120000, label: '1 Tahun' }
         ],
         warningDays: [7, 3, 1] // Warn at 7, 3, 1 days before expiry
     }
@@ -205,12 +205,12 @@ function formatExpiryMessage(daysRemaining, isExpired = false) {
         msg = `⚠️ SEWA AKAN BERAKHIR ⚠️\n\nsisa waktu: ${daysRemaining} hari lagi\nperpanjang sekarang agar tidak terputus.\n\n`;
     }
 
-    msg += `💰 HARGA SEWA:\n`;
+    msg += `Price:\n`;
     prices.forEach(p => {
         msg += `• ${p.label}: Rp ${p.price.toLocaleString('id-ID')}\n`;
     });
 
-    msg += `\n💳 PEMBAYARAN:\n`;
+    msg += `\nPayment:\n`;
     msg += `Bank ${payment.bank}: ${payment.accountNumber}\na.n ${payment.accountName}\n\n`;
     msg += `E-Wallet:\n`;
     if (payment.ewallet.dana) msg += `• DANA: ${payment.ewallet.dana}\n`;
