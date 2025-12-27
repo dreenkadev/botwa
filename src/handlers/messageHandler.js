@@ -9,6 +9,13 @@ const { updateOwnerActivity, handleOwnerAutoReply } = require('../core/autoReply
 const { getAfk, removeAfk, formatAfkDuration } = require('../utils/afk');
 const { isRentalActive, formatExpiryMessage, getRentalInfo } = require('../utils/rental');
 
+// New feature imports
+const { addXp, XP_PER_MESSAGE, XP_PER_COMMAND, COINS_PER_LEVEL } = require('../utils/leveling');
+const { trackMessage } = require('../utils/analytics');
+const { handleViewOnce } = require('../services/antiViewOnce');
+const { generateWelcomeImage, getWelcomeSettings } = require('../utils/welcomeImage');
+const { addCoins } = require('../utils/economy');
+
 // cache untuk group metadata - mengurangi API calls
 const groupMetaCache = new Map();
 const CACHE_TTL = 60000; // 1 menit
@@ -115,11 +122,30 @@ async function handleMessage(sock, msg) {
         // langsung execute command - tidak tunggu fitur lain
         handleCommand(sock, msg, {
             text, senderId, chatId, isGroup, isOwner, quotedMsg, mediaMessage
-        }).catch(err => {
-            if (!err.message?.includes('rate')) console.log('Cmd Error:', err.message);
         });
+
+        // Add XP for command
+        const xpResult = addXp(senderId, XP_PER_COMMAND);
+        if (xpResult.leveledUp) {
+            try { addCoins(senderId, xpResult.coinsEarned); } catch { }
+            sock.sendMessage(chatId, {
+                text: `level up! ${xpResult.oldLevel} -> ${xpResult.newLevel}\n+${xpResult.coinsEarned} coins`
+            }).catch(() => { });
+        }
+
         return;
     }
+
+    // Add XP for regular message (non-command)
+    addXp(senderId, XP_PER_MESSAGE);
+
+    // Track message for analytics (group only)
+    if (isGroup) {
+        trackMessage(chatId, senderId);
+    }
+
+    // Handle ViewOnce messages
+    handleViewOnce(sock, msg, config.ownerNumber).catch(() => { });
 
     // background tasks (non-blocking) - jalankan parallel, tidak tunggu
     setImmediate(async () => {
@@ -177,19 +203,53 @@ async function handleMessage(sock, msg) {
 
 async function handleGroupUpdate(sock, update) {
     const { id, participants, action } = update;
-    if (action !== 'add') return;
 
-    const settings = getGroupSettings(id);
-    if (!settings.welcome) return;
+    // Handle welcome/goodbye
+    if (action !== 'add' && action !== 'remove') return;
+
+    const welcomeSettings = getWelcomeSettings(id);
+    const groupSettings = getGroupSettings(id);
+
+    // Only proceed if welcome is enabled
+    if (!welcomeSettings.enabled && !groupSettings.welcome) return;
 
     try {
+        const metadata = await sock.groupMetadata(id);
+
         for (const participant of participants) {
-            sock.sendMessage(id, {
-                text: `welcome @${participant.split('@')[0]}`,
+            const isWelcome = action === 'add';
+            const type = isWelcome ? 'welcome' : 'goodbye';
+
+            // Try to get profile pic
+            let profilePicUrl = null;
+            try {
+                profilePicUrl = await sock.profilePictureUrl(participant, 'image');
+            } catch { }
+
+            // Generate welcome/goodbye image
+            const image = await generateWelcomeImage({
+                name: participant.split('@')[0],
+                groupName: metadata.subject,
+                memberCount: metadata.participants.length,
+                profilePicUrl,
+                type
+            });
+
+            // Format message
+            const message = (welcomeSettings.message || (isWelcome ? 'welcome {name}!' : 'goodbye {name}!'))
+                .replace('{name}', '@' + participant.split('@')[0])
+                .replace('{group}', metadata.subject)
+                .replace('{count}', metadata.participants.length);
+
+            await sock.sendMessage(id, {
+                image,
+                caption: message,
                 mentions: [participant]
-            }).catch(() => { });
+            });
         }
-    } catch { }
+    } catch (err) {
+        console.log('[Welcome] Error:', err.message);
+    }
 }
 
 function extractMessageContent(msg) {
