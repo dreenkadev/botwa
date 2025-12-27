@@ -38,12 +38,16 @@ function saveOwnerLid(lid) {
 // Check if sender is owner (supports both phone and LID format)
 function isOwnerCheck(senderId) {
     const phoneNumber = config.ownerNumber;
+    const configLid = config.ownerLid;
     const senderBase = senderId.replace(/@.*$/, ''); // Remove @s.whatsapp.net or @lid
 
     // Check phone number match
     if (senderBase === phoneNumber) return true;
 
-    // Check LID match
+    // Check LID from config
+    if (configLid && senderBase === configLid) return true;
+
+    // Check LID from saved file
     loadOwnerLid();
     if (ownerLid && senderBase === ownerLid) return true;
 
