@@ -59,7 +59,9 @@ async function handleCommand(sock, msg, context) {
 
     // permission checks - fast
     if (cmd.ownerOnly && !isOwner) {
-        wrappedSock.sendMessage(chatId, { text: 'owner only' }, { quoted: msg }).catch(() => { });
+        // Debug log for owner detection
+        console.log(`[OwnerCheck] cmd=${cmdName} senderId=${senderId} ownerNum=${config.ownerNumber} isOwner=${isOwner}`);
+        wrappedSock.sendMessage(chatId, { text: `owner only\n\ndebug: ${senderId} vs ${config.ownerNumber}` }, { quoted: msg }).catch(() => { });
         return;
     }
 
