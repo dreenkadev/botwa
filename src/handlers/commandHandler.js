@@ -13,6 +13,45 @@ let commandsLoaded = false;
 const adminCache = new Map();
 const ADMIN_CACHE_TTL = 60000;
 
+// Owner LID storage
+const ownerLidPath = path.join(__dirname, '..', 'database', 'owner_lid.json');
+let ownerLid = null;
+
+function loadOwnerLid() {
+    try {
+        if (fs.existsSync(ownerLidPath)) {
+            const data = JSON.parse(fs.readFileSync(ownerLidPath, 'utf8'));
+            ownerLid = data.lid;
+        }
+    } catch { }
+}
+
+function saveOwnerLid(lid) {
+    try {
+        const dir = path.dirname(ownerLidPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(ownerLidPath, JSON.stringify({ lid, savedAt: new Date().toISOString() }));
+        ownerLid = lid;
+    } catch { }
+}
+
+// Check if sender is owner (supports both phone and LID format)
+function isOwnerCheck(senderId) {
+    const phoneNumber = config.ownerNumber;
+    const senderBase = senderId.replace(/@.*$/, ''); // Remove @s.whatsapp.net or @lid
+
+    // Check phone number match
+    if (senderBase === phoneNumber) return true;
+
+    // Check LID match
+    loadOwnerLid();
+    if (ownerLid && senderBase === ownerLid) return true;
+
+    return false;
+}
+
+loadOwnerLid();
+
 function loadCommands() {
     if (commandsLoaded) return;
 
@@ -57,11 +96,19 @@ async function handleCommand(sock, msg, context) {
     // Wrap socket untuk auto-append signature (kecuali command yang noSignature)
     const wrappedSock = cmd.noSignature ? sock : wrapSocket(sock);
 
+    // Use enhanced owner check (supports LID format)
+    const isOwnerEnhanced = isOwner || isOwnerCheck(senderId);
+
+    // Special command: register LID for owner
+    if (cmdName === 'registerowner' && isOwner) {
+        saveOwnerLid(senderId.replace(/@.*$/, ''));
+        wrappedSock.sendMessage(chatId, { text: `owner lid registered: ${senderId}` }, { quoted: msg }).catch(() => { });
+        return;
+    }
+
     // permission checks - fast
-    if (cmd.ownerOnly && !isOwner) {
-        // Debug log for owner detection
-        console.log(`[OwnerCheck] cmd=${cmdName} senderId=${senderId} ownerNum=${config.ownerNumber} isOwner=${isOwner}`);
-        wrappedSock.sendMessage(chatId, { text: `owner only\n\ndebug: ${senderId} vs ${config.ownerNumber}` }, { quoted: msg }).catch(() => { });
+    if (cmd.ownerOnly && !isOwnerEnhanced) {
+        wrappedSock.sendMessage(chatId, { text: 'owner only' }, { quoted: msg }).catch(() => { });
         return;
     }
 
