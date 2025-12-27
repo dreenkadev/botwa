@@ -83,8 +83,17 @@ module.exports = {
     description: 'test semua commands',
     ownerOnly: true,
 
-    async execute(sock, msg, { chatId, args }) {
+    async execute(sock, msg, { chatId, args, senderId, isOwner }) {
         try {
+            // Debug info
+            if (args[0] === 'debug') {
+                const config = require('../../../config');
+                await sock.sendMessage(chatId, {
+                    text: `debug info:\n\nsenderId: ${senderId}\nownerNumber: ${config.ownerNumber}\nisOwner: ${isOwner}\nmatch: ${senderId === config.ownerNumber}`
+                }, { quoted: msg });
+                return;
+            }
+
             // Lazy load to avoid circular dependency
             const { getCommandsList } = require('../../handlers/commandHandler');
             const commands = getCommandsList();
