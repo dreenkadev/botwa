@@ -82,10 +82,16 @@ async function handleCommand(sock, msg, context) {
         quotedText = quotedMsg.conversation || quotedMsg.extendedTextMessage?.text || null;
     }
 
+    // Check if sender is admin (for commands that need it)
+    let isAdmin = false;
+    if (isGroup) {
+        isAdmin = await checkAdminCached(sock, chatId, senderId);
+    }
+
     // execute command with wrapped socket
     try {
         await cmd.execute(wrappedSock, msg, {
-            args, senderId, chatId, isGroup, isOwner,
+            args, senderId, chatId, isGroup, isOwner, isAdmin,
             quotedMsg, quotedText, mediaMessage, prefix: config.prefix
         });
     } catch (err) {
@@ -95,17 +101,32 @@ async function handleCommand(sock, msg, context) {
 }
 
 async function checkAdminCached(sock, groupId, participantId) {
-    const key = `${groupId}_${participantId}`;
+    // Normalize participantId - ensure it has @s.whatsapp.net suffix
+    const normalizedId = participantId.includes('@')
+        ? participantId
+        : `${participantId}@s.whatsapp.net`;
+
+    const key = `${groupId}_${normalizedId}`;
     const cached = adminCache.get(key);
     if (cached && Date.now() - cached.time < ADMIN_CACHE_TTL) return cached.value;
 
     try {
         const meta = await sock.groupMetadata(groupId);
-        const p = meta.participants.find(p => p.id === participantId || p.id === `${participantId}@s.whatsapp.net`);
-        const isAdmin = p?.admin === 'admin' || p?.admin === 'superadmin';
+
+        // Check if participant is admin (handle both ID formats)
+        const isAdmin = meta.participants.some(p => {
+            const pId = p.id;
+            const pIdBase = pId.split('@')[0];
+            const searchIdBase = normalizedId.split('@')[0];
+
+            return pIdBase === searchIdBase &&
+                (p.admin === 'admin' || p.admin === 'superadmin');
+        });
+
         adminCache.set(key, { value: isAdmin, time: Date.now() });
         return isAdmin;
-    } catch {
+    } catch (err) {
+        console.log('[AdminCheck] Error:', err.message);
         return false;
     }
 }
