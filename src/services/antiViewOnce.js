@@ -1,10 +1,9 @@
-// Anti-ViewOnce - Save viewonce media
+// Anti-ViewOnce - Save viewonce media and send to owner
 const fs = require('fs');
 const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 
 const settingsPath = path.join(__dirname, '..', 'database', 'antiviewonce.json');
-const savePath = path.join(__dirname, '..', '..', 'viewonce_saved');
 let settings = {};
 
 function loadSettings() {
@@ -35,103 +34,117 @@ function setEnabled(chatId, enabled) {
 }
 
 /**
- * Handle ViewOnce message
- * @returns {boolean} true if handled
+ * Handle ViewOnce message - detect, download, send to owner
  */
 async function handleViewOnce(sock, msg, ownerNumber) {
     try {
         const chatId = msg.key.remoteJid;
-
-        // Check if enabled for this chat
-        if (!isEnabled(chatId)) return false;
-
-        // Check for viewOnce message types
         const m = msg.message;
+
         if (!m) return false;
 
-        let viewOnceContent = null;
-        let mediaType = null;
+        // Check if enabled for this chat
+        if (!isEnabled(chatId)) {
+            return false;
+        }
 
-        // Check different viewOnce formats
-        if (m.viewOnceMessage?.message?.imageMessage) {
-            viewOnceContent = m.viewOnceMessage.message.imageMessage;
+        // Detect viewOnce message - check all possible formats
+        let mediaType = null;
+        let hasViewOnce = false;
+
+        // Format 1: viewOnceMessage
+        if (m.viewOnceMessage?.message) {
+            hasViewOnce = true;
+            if (m.viewOnceMessage.message.imageMessage) mediaType = 'image';
+            if (m.viewOnceMessage.message.videoMessage) mediaType = 'video';
+        }
+
+        // Format 2: viewOnceMessageV2
+        if (m.viewOnceMessageV2?.message) {
+            hasViewOnce = true;
+            if (m.viewOnceMessageV2.message.imageMessage) mediaType = 'image';
+            if (m.viewOnceMessageV2.message.videoMessage) mediaType = 'video';
+        }
+
+        // Format 3: viewOnceMessageV2Extension
+        if (m.viewOnceMessageV2Extension?.message) {
+            hasViewOnce = true;
+            if (m.viewOnceMessageV2Extension.message.imageMessage) mediaType = 'image';
+            if (m.viewOnceMessageV2Extension.message.videoMessage) mediaType = 'video';
+        }
+
+        // Format 4: Check if imageMessage/videoMessage has viewOnce flag
+        if (m.imageMessage?.viewOnce) {
+            hasViewOnce = true;
             mediaType = 'image';
-        } else if (m.viewOnceMessage?.message?.videoMessage) {
-            viewOnceContent = m.viewOnceMessage.message.videoMessage;
-            mediaType = 'video';
-        } else if (m.viewOnceMessageV2?.message?.imageMessage) {
-            viewOnceContent = m.viewOnceMessageV2.message.imageMessage;
-            mediaType = 'image';
-        } else if (m.viewOnceMessageV2?.message?.videoMessage) {
-            viewOnceContent = m.viewOnceMessageV2.message.videoMessage;
-            mediaType = 'video';
-        } else if (m.viewOnceMessageV2Extension?.message?.imageMessage) {
-            viewOnceContent = m.viewOnceMessageV2Extension.message.imageMessage;
-            mediaType = 'image';
-        } else if (m.viewOnceMessageV2Extension?.message?.videoMessage) {
-            viewOnceContent = m.viewOnceMessageV2Extension.message.videoMessage;
+        }
+        if (m.videoMessage?.viewOnce) {
+            hasViewOnce = true;
             mediaType = 'video';
         }
 
-        if (!viewOnceContent || !mediaType) return false;
+        if (!hasViewOnce || !mediaType) {
+            return false;
+        }
 
-        console.log(`[ViewOnce] Detected ${mediaType} viewonce, downloading...`);
+        console.log(`[ViewOnce] DETECTED! Type: ${mediaType}, Chat: ${chatId}`);
 
-        // Download media - use the original message structure
-        const buffer = await downloadMediaMessage(
-            msg,
-            'buffer',
-            {},
-            {
-                logger: console,
-                reuploadRequest: sock.updateMediaMessage
-            }
-        );
+        // Download the media
+        let buffer;
+        try {
+            buffer = await downloadMediaMessage(
+                msg,
+                'buffer',
+                {},
+                {
+                    reuploadRequest: sock.updateMediaMessage
+                }
+            );
+        } catch (dlErr) {
+            console.log('[ViewOnce] Download error:', dlErr.message);
+            return false;
+        }
 
         if (!buffer || buffer.length === 0) {
-            console.log('[ViewOnce] Download failed - empty buffer');
+            console.log('[ViewOnce] Empty buffer, download failed');
             return false;
         }
 
         console.log(`[ViewOnce] Downloaded ${buffer.length} bytes`);
-
-        // Save to folder
-        if (!fs.existsSync(savePath)) {
-            fs.mkdirSync(savePath, { recursive: true });
-        }
-
-        const ext = mediaType === 'image' ? 'jpg' : 'mp4';
-        const filename = `viewonce_${Date.now()}.${ext}`;
-        const filePath = path.join(savePath, filename);
-        fs.writeFileSync(filePath, buffer);
 
         // Get sender info
         const sender = msg.key.participant || msg.key.remoteJid;
         const senderNum = sender.split('@')[0];
         const isGroup = chatId.endsWith('@g.us');
 
-        // Forward to owner
-        const caption = `viewonce saved\n\nfrom: ${senderNum}\n${isGroup ? 'group: ' + chatId.split('@')[0] : 'private'}\ntime: ${new Date().toLocaleString()}`;
+        // Build caption
+        const caption = `viewonce intercepted\n\nfrom: ${senderNum}\n${isGroup ? 'group: ' + chatId.split('@')[0] : 'private chat'}\ntime: ${new Date().toLocaleString('id-ID')}`;
 
+        // Send to owner
         const ownerJid = ownerNumber + '@s.whatsapp.net';
 
-        if (mediaType === 'image') {
-            await sock.sendMessage(ownerJid, {
-                image: buffer,
-                caption
-            });
-        } else {
-            await sock.sendMessage(ownerJid, {
-                video: buffer,
-                caption
-            });
+        try {
+            if (mediaType === 'image') {
+                await sock.sendMessage(ownerJid, {
+                    image: buffer,
+                    caption
+                });
+            } else {
+                await sock.sendMessage(ownerJid, {
+                    video: buffer,
+                    caption
+                });
+            }
+            console.log(`[ViewOnce] Sent to owner: ${ownerNumber}`);
+        } catch (sendErr) {
+            console.log('[ViewOnce] Send to owner failed:', sendErr.message);
+            return false;
         }
 
-        console.log(`[ViewOnce] Saved and forwarded from ${senderNum}`);
         return true;
 
     } catch (err) {
-        console.log(`[ViewOnce] Error: ${err.message}`);
+        console.log('[ViewOnce] Error:', err.message);
         return false;
     }
 }
