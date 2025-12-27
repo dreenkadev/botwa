@@ -40,6 +40,7 @@ function checkSpam(userId) {
         const remaining = Math.ceil((userData.blockedUntil - now) / 1000);
         return {
             blocked: true,
+            
             message: `⏳ Spam detected! Wait ${remaining}s`,
             remaining
         };
