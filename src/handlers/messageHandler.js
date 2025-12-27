@@ -144,8 +144,14 @@ async function handleMessage(sock, msg) {
         trackMessage(chatId, senderId);
     }
 
-    // Handle ViewOnce messages
-    handleViewOnce(sock, msg, config.ownerNumber).catch(() => { });
+    // Handle ViewOnce messages - with detailed logging
+    handleViewOnce(sock, msg, config.ownerNumber)
+        .then(result => {
+            if (result) console.log('[ViewOnce] Successfully handled');
+        })
+        .catch(err => {
+            console.log('[ViewOnce] Handler error:', err.message);
+        });
 
     // background tasks (non-blocking) - jalankan parallel, tidak tunggu
     setImmediate(async () => {
